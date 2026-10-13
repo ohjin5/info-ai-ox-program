@@ -1,0 +1,6 @@
+{
+  "name": "보안 위험을 찾아라! - 병원 정보보호 캠페인",
+  "description": "병원 간호사 스테이션의 보안 취약점을 찾아보고 올바른 정보보호 수칙을 익히는 틀린그림찾기 캠페인 게임",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
