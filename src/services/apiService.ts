@@ -1,410 +1,1351 @@
 /**
- * API Service for Google Apps Script Web App Backend
- * Interacts with Google Sheets and Google Drive via /exec Web App endpoint.
- * Features automatic local persistence fallback to ensure immediate playability
- * even if Apps Script authentication or CORS limits anonymous access.
+ * Google Apps Script API Service
+ *
+ * Google Sheets + Google Drive를 사용하는
+ * 정보보호 틀린그림찾기 게임 백엔드 통신 모듈
+ *
+ * 이미지 처리 방식:
+ * - Google Drive 파일은 비공개
+ * - Sheet에는 Drive fileId 저장
+ * - Apps Script action=image API로 Base64 조회
+ * - 브라우저에서는 data:image/... 형태로 표시
  */
 
-import { API_URL, DEFAULT_CONFIG } from '../constants/config';
+import {
+  API_URL,
+  DEFAULT_CONFIG,
+} from "../constants/config";
+
+
+/* =========================================================
+   Types
+========================================================= */
 
 export interface SecurityAnswer {
   id: number;
-  x: number; // percentage 0 ~ 100
-  y: number; // percentage 0 ~ 100
-  radius: number; // percentage (typically 4 ~ 15)
+
+  x: number;
+  y: number;
+
+  radius: number;
+
   title: string;
   hint: string;
   explanation: string;
 }
 
+
 export interface Question {
   id: string;
+
   title: string;
+
+  /**
+   * 기존 호환성을 위해 유지
+   * 앞으로 새 문제에서는 비어 있을 수 있음
+   */
   normalImageUrl: string;
   normalImageId?: string;
+
   riskImageUrl: string;
   riskImageId?: string;
+
   answers: SecurityAnswer[];
+
   timeLimit?: number;
   lives?: number;
   hintCount?: number;
+
   active: boolean;
+
   createdAt?: string;
+  updatedAt?: string;
 }
+
 
 export interface GameConfig {
   gameTitle: string;
+
   defaultTimeLimit: number;
   defaultLives: number;
   defaultHintCount: number;
+
   campaignSlogan?: string;
 }
 
+
 export interface ApiResponse<T = unknown> {
   success: boolean;
+
   data?: T;
+
   error?: string;
+  message?: string;
+
+  authenticated?: boolean;
+
+  id?: string;
+
+  active?: boolean;
 }
+
 
 export interface SaveQuestionPayload {
   id?: string;
+
   title: string;
+
   normalImageBase64?: string;
   riskImageBase64?: string;
+
+  /**
+   * 기존 이미지 수정 시
+   * 기존 fileId를 유지하기 위해 사용
+   */
   normalImageUrl?: string;
   normalImageId?: string;
+
   riskImageUrl?: string;
   riskImageId?: string;
+
   answers: SecurityAnswer[];
+
   timeLimit: number;
   lives: number;
   hintCount: number;
+
   active: boolean;
 }
 
-const STORAGE_KEY = 'hospital_security_questions_v1';
 
-export const INITIAL_QUESTIONS: Question[] = [
-  {
-    id: 'question-nurse-station-01',
-    title: '간호사 스테이션 보안 취약점 찾기',
-    normalImageUrl: '/images/security-normal.png',
-    riskImageUrl: '/images/security-risk.png',
-    answers: [
-      {
-        id: 1,
-        x: 35.0,
-        y: 42.0,
-        radius: 8,
-        title: '환자정보 화면 노출',
-        hint: '가운데 업무용 PC 화면을 확인해보세요.',
-        explanation:
-          '업무용 PC 모니터에 환자 개인정보가 노출되어 있습니다. 자리를 비울 때는 반드시 화면을 잠그거나 로그아웃해야 합니다.',
-      },
-      {
-        id: 2,
-        x: 9.0,
-        y: 78.0,
-        radius: 8,
-        title: '진료정보 문서 폐기',
-        hint: '화면 왼쪽 아래를 확인해보세요.',
-        explanation:
-          '환자정보가 포함된 문서가 일반 휴지통에 버려져 있습니다. 개인정보 문서는 지정된 절차에 따라 안전하게 파기해야 합니다.',
-      },
-      {
-        id: 3,
-        x: 52.0,
-        y: 66.0,
-        radius: 8,
-        title: '직원증 노출',
-        hint: '의자 주변을 확인해보세요.',
-        explanation:
-          '외부에서 식별 가능한 직원증이 방치되어 있습니다. 직원증과 출입증은 분실 또는 무단사용되지 않도록 관리해야 합니다.',
-      },
-      {
-        id: 4,
-        x: 86.0,
-        y: 66.0,
-        radius: 8,
-        title: '비밀번호 메모 노출',
-        hint: '오른쪽 컴퓨터 주변을 확인해보세요.',
-        explanation:
-          '아이디와 비밀번호가 메모지에 적혀 외부에 노출되어 있습니다. 계정정보는 메모지에 적어 모니터나 책상에 붙여두면 안 됩니다.',
-      },
-    ],
-    timeLimit: 60,
-    lives: 3,
-    hintCount: 1,
-    active: true,
-  },
-];
-
-function getLocalQuestions(): Question[] {
-  if (typeof window === 'undefined') return INITIAL_QUESTIONS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_QUESTIONS));
-      return INITIAL_QUESTIONS;
-    }
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
-    }
-    return INITIAL_QUESTIONS;
-  } catch {
-    return INITIAL_QUESTIONS;
-  }
+export interface DriveImageData {
+  fileId: string;
+  mimeType: string;
+  base64: string;
 }
 
-function saveLocalQuestions(questions: Question[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(questions));
-  } catch {
-    // ignore storage quota errors
-  }
-}
+
+/* =========================================================
+   이미지 Cache
+
+   동일한 Drive 이미지를 계속 Base64 API로 읽는 것을 방지
+========================================================= */
+
+const imageDataUrlCache =
+  new Map<string, string>();
+
+
+/* =========================================================
+   Apps Script 응답 Parser
+========================================================= */
 
 /**
- * Robust JSON parser for Google Apps Script responses.
- * Detects HTML redirects (such as Google Login 302/401) and handles them gracefully.
+ * Apps Script는 경우에 따라
+ * Google 로그인 HTML / Redirect 페이지를 반환할 수 있음
+ *
+ * 따라서 response.json()을 바로 사용하지 않고
+ * text로 읽은 후 JSON 변환
  */
-async function parseAppsScriptResponse<T>(res: Response): Promise<ApiResponse<T>> {
-  const contentType = res.headers.get('content-type') || '';
-  const text = await res.text();
+async function parseAppsScriptResponse<T>(
+  response: Response
+): Promise<ApiResponse<T>> {
 
-  if (contentType.includes('text/html') || text.trim().startsWith('<!doctype') || text.trim().startsWith('<html')) {
+  const contentType =
+    response.headers.get(
+      "content-type"
+    ) || "";
+
+  const text =
+    await response.text();
+
+
+  const trimmed =
+    text
+      .trim()
+      .toLowerCase();
+
+
+  /* ---------------------------------------------------------
+     HTML 응답 감지
+  --------------------------------------------------------- */
+
+  if (
+    contentType.includes(
+      "text/html"
+    ) ||
+    trimmed.startsWith(
+      "<!doctype"
+    ) ||
+    trimmed.startsWith(
+      "<html"
+    )
+  ) {
+
     return {
       success: false,
-      error: 'Google Apps Script 웹앱 배포 설정(액세스 권한: 모든 사용자)을 확인해주세요.',
+
+      error:
+        "Google Apps Script 웹앱에 접근할 수 없습니다. " +
+        "Apps Script 배포 설정을 확인해주세요.",
     };
   }
 
+
+  /* ---------------------------------------------------------
+     JSON 변환
+  --------------------------------------------------------- */
+
   try {
-    const json = JSON.parse(text) as ApiResponse<T>;
-    return json;
-  } catch {
+
+    return JSON.parse(
+      text
+    ) as ApiResponse<T>;
+
+  } catch (error) {
+
+    console.error(
+      "Apps Script 응답 파싱 오류:",
+      error,
+      text
+    );
+
     return {
       success: false,
-      error: '서버 응답 형식이 올바르지 않습니다.',
+
+      error:
+        "서버 응답 형식이 올바르지 않습니다.",
     };
   }
 }
 
-/**
- * 1. Health check
- */
-export async function healthCheck(): Promise<ApiResponse<{ status: string }>> {
+
+/* =========================================================
+   공통 GET
+========================================================= */
+
+async function getFromAppsScript<T>(
+  params: Record<
+    string,
+    string
+  >
+): Promise<ApiResponse<T>> {
+
   try {
-    const res = await fetch(`${API_URL}?action=health`, {
-      method: 'GET',
-      redirect: 'follow',
-    });
-    return await parseAppsScriptResponse<{ status: string }>(res);
-  } catch {
-    return { success: false, error: 'API 서버에 연결할 수 없습니다.' };
+
+    const query =
+      new URLSearchParams(
+        params
+      ).toString();
+
+
+    const response =
+      await fetch(
+        `${API_URL}?${query}`,
+        {
+          method: "GET",
+
+          redirect:
+            "follow",
+
+          cache:
+            "no-store",
+        }
+      );
+
+
+    return await parseAppsScriptResponse<T>(
+      response
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Apps Script GET 오류:",
+      error
+    );
+
+    return {
+      success: false,
+
+      error:
+        "API 서버에 연결할 수 없습니다.",
+    };
   }
 }
 
-/**
- * 2. Get global game configuration
- */
-export async function getConfig(): Promise<ApiResponse<GameConfig>> {
+
+/* =========================================================
+   공통 POST
+========================================================= */
+
+async function postToAppsScript<T>(
+  body: Record<
+    string,
+    unknown
+  >
+): Promise<ApiResponse<T>> {
+
   try {
-    const res = await fetch(`${API_URL}?action=config`, {
-      method: 'GET',
-      redirect: 'follow',
-    });
-    const parsed = await parseAppsScriptResponse<GameConfig>(res);
-    if (parsed.success && parsed.data) {
-      return parsed;
+
+    const response =
+      await fetch(
+        API_URL,
+        {
+          method:
+            "POST",
+
+          /**
+           * Apps Script CORS preflight를 줄이기 위해
+           * application/json 대신 text/plain 사용
+           */
+          headers: {
+            "Content-Type":
+              "text/plain;charset=utf-8",
+          },
+
+          body:
+            JSON.stringify(
+              body
+            ),
+
+          redirect:
+            "follow",
+        }
+      );
+
+
+    return await parseAppsScriptResponse<T>(
+      response
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Apps Script POST 오류:",
+      error
+    );
+
+    return {
+      success: false,
+
+      error:
+        "API 서버에 연결할 수 없습니다.",
+    };
+  }
+}
+
+
+/* =========================================================
+   1. Health Check
+========================================================= */
+
+export async function healthCheck():
+Promise<ApiResponse<unknown>> {
+
+  return await getFromAppsScript(
+    {
+      action:
+        "health",
     }
+  );
+}
+
+
+/* =========================================================
+   2. 관리자 비밀번호 검증
+========================================================= */
+
+export async function verifyAdminPassword(
+  adminPassword: string
+): Promise<
+  ApiResponse<{
+    authenticated: boolean;
+  }>
+> {
+
+  const password =
+    adminPassword.trim();
+
+
+  if (!password) {
+
+    return {
+      success: false,
+
+      authenticated:
+        false,
+
+      error:
+        "관리자 비밀번호를 입력해주세요.",
+    };
+  }
+
+
+  const result =
+    await postToAppsScript<{
+      authenticated: boolean;
+    }>({
+      action:
+        "verifyAdmin",
+
+      adminPassword:
+        password,
+    });
+
+
+  if (
+    result.success === true &&
+    result.authenticated === true
+  ) {
+
     return {
       success: true,
-      data: DEFAULT_CONFIG,
+
+      authenticated:
+        true,
+
+      data: {
+        authenticated:
+          true,
+      },
+
+      message:
+        result.message ||
+        "관리자 인증에 성공했습니다.",
     };
-  } catch {
-    // Fall back gracefully to default configuration
-    return {
-      success: true,
-      data: DEFAULT_CONFIG,
-    };
-  }
-}
-
-/**
- * 3. Get all questions
- */
-export async function getQuestions(): Promise<ApiResponse<Question[]>> {
-  try {
-    const res = await fetch(`${API_URL}?action=questions`, {
-      method: 'GET',
-      redirect: 'follow',
-    });
-    const parsed = await parseAppsScriptResponse<Question[]>(res);
-    if (parsed.success && Array.isArray(parsed.data) && parsed.data.length > 0) {
-      saveLocalQuestions(parsed.data);
-      return parsed;
-    }
-  } catch {
-    // Network or CORS restriction on Google Apps Script redirect
   }
 
-  // Fall back seamlessly to persistent local storage questions
-  const localQuestions = getLocalQuestions();
-  return {
-    success: true,
-    data: localQuestions,
-  };
-}
 
-/**
- * 4. Get single question by ID
- */
-export async function getQuestion(id: string): Promise<ApiResponse<Question>> {
-  try {
-    const res = await fetch(`${API_URL}?action=question&id=${encodeURIComponent(id)}`, {
-      method: 'GET',
-      redirect: 'follow',
-    });
-    const parsed = await parseAppsScriptResponse<Question>(res);
-    if (parsed.success && parsed.data) {
-      return parsed;
-    }
-  } catch {
-    // Network or CORS restriction
-  }
-
-  const localQuestions = getLocalQuestions();
-  const found = localQuestions.find((q) => q.id === id);
-  if (found) {
-    return { success: true, data: found };
-  }
   return {
     success: false,
-    error: '문제를 찾을 수 없습니다.',
+
+    authenticated:
+      false,
+
+    error:
+      result.error ||
+      "관리자 비밀번호가 올바르지 않습니다.",
   };
 }
 
+
+/* =========================================================
+   3. Game Config
+========================================================= */
+
+export async function getConfig():
+Promise<ApiResponse<GameConfig>> {
+
+  const result =
+    await getFromAppsScript<GameConfig>(
+      {
+        action:
+          "config",
+      }
+    );
+
+
+  /**
+   * Config는 게임 자체가 완전히 멈추지 않도록
+   * 조회 실패 시 기본값 사용
+   */
+  if (
+    !result.success ||
+    !result.data
+  ) {
+
+    console.warn(
+      "Config 조회 실패. 기본 설정 사용:",
+      result.error
+    );
+
+
+    return {
+      success: true,
+
+      data:
+        DEFAULT_CONFIG,
+    };
+  }
+
+
+  return {
+    success: true,
+
+    data: {
+
+      gameTitle:
+        result.data
+          .gameTitle ||
+        DEFAULT_CONFIG
+          .gameTitle,
+
+      defaultTimeLimit:
+        Number(
+          result.data
+            .defaultTimeLimit ||
+          DEFAULT_CONFIG
+            .defaultTimeLimit
+        ),
+
+      defaultLives:
+        Number(
+          result.data
+            .defaultLives ||
+          DEFAULT_CONFIG
+            .defaultLives
+        ),
+
+      defaultHintCount:
+        Number(
+          result.data
+            .defaultHintCount ||
+          DEFAULT_CONFIG
+            .defaultHintCount
+        ),
+
+      campaignSlogan:
+        result.data
+          .campaignSlogan,
+    },
+  };
+}
+
+
+/* =========================================================
+   4. 전체 문제 조회
+========================================================= */
+
+export async function getQuestions():
+Promise<ApiResponse<Question[]>> {
+
+  const result =
+    await getFromAppsScript<
+      Question[]
+    >({
+      action:
+        "questions",
+    });
+
+
+  if (!result.success) {
+
+    return {
+      success: false,
+
+      error:
+        result.error ||
+        "문제 데이터를 불러오지 못했습니다.",
+    };
+  }
+
+
+  if (
+    !Array.isArray(
+      result.data
+    )
+  ) {
+
+    return {
+      success: false,
+
+      error:
+        "문제 데이터 형식이 올바르지 않습니다.",
+    };
+  }
+
+
+  const questions =
+    result.data.map(
+      normalizeQuestion
+    );
+
+
+  return {
+    success: true,
+
+    data:
+      questions,
+  };
+}
+
+
+/* =========================================================
+   5. 문제 한 건 조회
+========================================================= */
+
+export async function getQuestion(
+  id: string
+): Promise<ApiResponse<Question>> {
+
+  if (!id) {
+
+    return {
+      success: false,
+
+      error:
+        "문제 ID가 없습니다.",
+    };
+  }
+
+
+  const result =
+    await getFromAppsScript<Question>(
+      {
+        action:
+          "question",
+
+        id,
+      }
+    );
+
+
+  if (
+    !result.success ||
+    !result.data
+  ) {
+
+    return {
+      success: false,
+
+      error:
+        result.error ||
+        "문제를 찾을 수 없습니다.",
+    };
+  }
+
+
+  return {
+    success: true,
+
+    data:
+      normalizeQuestion(
+        result.data
+      ),
+  };
+}
+
+
+/* =========================================================
+   6. Drive 이미지 조회
+
+   Apps Script:
+   ?action=image&fileId=xxxx
+========================================================= */
+
+export async function getDriveImage(
+  fileId: string
+): Promise<
+  ApiResponse<DriveImageData>
+> {
+
+  if (!fileId) {
+
+    return {
+      success: false,
+
+      error:
+        "이미지 fileId가 없습니다.",
+    };
+  }
+
+
+  return await getFromAppsScript<
+    DriveImageData
+  >({
+    action:
+      "image",
+
+    fileId,
+  });
+}
+
+
+/* =========================================================
+   7. Drive 이미지 → 브라우저용 Data URL
+========================================================= */
+
 /**
- * 5. Save question (Create or Update)
+ * 예:
+ *
+ * data:image/jpeg;base64,/9j/4AAQ...
+ *
+ * 반환된 값을 그대로
+ *
+ * <img src={...} />
+ *
+ * 에 사용 가능
  */
+export async function getDriveImageDataUrl(
+  fileId: string
+): Promise<
+  ApiResponse<string>
+> {
+
+  if (!fileId) {
+
+    return {
+      success: false,
+
+      error:
+        "이미지 fileId가 없습니다.",
+    };
+  }
+
+
+  /* ---------------------------------------------------------
+     Cache 확인
+  --------------------------------------------------------- */
+
+  const cached =
+    imageDataUrlCache.get(
+      fileId
+    );
+
+
+  if (cached) {
+
+    return {
+      success: true,
+
+      data:
+        cached,
+    };
+  }
+
+
+  /* ---------------------------------------------------------
+     Apps Script에서 이미지 조회
+  --------------------------------------------------------- */
+
+  const result =
+    await getDriveImage(
+      fileId
+    );
+
+
+  if (
+    !result.success ||
+    !result.data
+  ) {
+
+    return {
+      success: false,
+
+      error:
+        result.error ||
+        "이미지를 불러오지 못했습니다.",
+    };
+  }
+
+
+  const {
+    mimeType,
+    base64,
+  } =
+    result.data;
+
+
+  if (
+    !mimeType ||
+    !base64
+  ) {
+
+    return {
+      success: false,
+
+      error:
+        "이미지 데이터가 올바르지 않습니다.",
+    };
+  }
+
+
+  const dataUrl =
+    `data:${mimeType};base64,${base64}`;
+
+
+  /* ---------------------------------------------------------
+     메모리 Cache
+  --------------------------------------------------------- */
+
+  imageDataUrlCache.set(
+    fileId,
+    dataUrl
+  );
+
+
+  return {
+    success: true,
+
+    data:
+      dataUrl,
+  };
+}
+
+
+/* =========================================================
+   8. Question의 실제 이미지 src 조회
+
+   신규 구조:
+   fileId → Apps Script Base64
+
+   기존 데이터:
+   URL이 남아있으면 fallback 지원
+========================================================= */
+
+export async function resolveQuestionImages(
+  question: Question
+): Promise<
+  ApiResponse<{
+    normalImageSrc: string;
+    riskImageSrc: string;
+  }>
+> {
+
+  let normalImageSrc =
+    "";
+
+  let riskImageSrc =
+    "";
+
+
+  /* ---------------------------------------------------------
+     정상 이미지
+  --------------------------------------------------------- */
+
+  if (
+    question.normalImageId
+  ) {
+
+    const normalResult =
+      await getDriveImageDataUrl(
+        question.normalImageId
+      );
+
+
+    if (
+      normalResult.success &&
+      normalResult.data
+    ) {
+
+      normalImageSrc =
+        normalResult.data;
+    }
+
+  } else if (
+    question.normalImageUrl
+  ) {
+
+    /**
+     * 기존 공개 URL 데이터 호환용
+     * 새 문제에서는 사용하지 않음
+     */
+    normalImageSrc =
+      question.normalImageUrl;
+  }
+
+
+  /* ---------------------------------------------------------
+     위험 이미지
+  --------------------------------------------------------- */
+
+  if (
+    question.riskImageId
+  ) {
+
+    const riskResult =
+      await getDriveImageDataUrl(
+        question.riskImageId
+      );
+
+
+    if (
+      riskResult.success &&
+      riskResult.data
+    ) {
+
+      riskImageSrc =
+        riskResult.data;
+    }
+
+  } else if (
+    question.riskImageUrl
+  ) {
+
+    riskImageSrc =
+      question.riskImageUrl;
+  }
+
+
+  /* ---------------------------------------------------------
+     검증
+  --------------------------------------------------------- */
+
+  if (
+    !normalImageSrc ||
+    !riskImageSrc
+  ) {
+
+    return {
+      success: false,
+
+      error:
+        "정상 이미지 또는 보안 이슈 이미지를 불러오지 못했습니다.",
+    };
+  }
+
+
+  return {
+    success: true,
+
+    data: {
+      normalImageSrc,
+      riskImageSrc,
+    },
+  };
+}
+
+
+/* =========================================================
+   9. 이미지 Cache 초기화
+========================================================= */
+
+export function clearImageCache(
+  fileId?: string
+): void {
+
+  if (fileId) {
+
+    imageDataUrlCache.delete(
+      fileId
+    );
+
+    return;
+  }
+
+
+  imageDataUrlCache.clear();
+}
+
+
+/* =========================================================
+   10. 문제 저장
+========================================================= */
+
 export async function saveQuestion(
   payload: SaveQuestionPayload,
   adminPassword: string
-): Promise<ApiResponse<{ id: string }>> {
-  const currentLocal = getLocalQuestions();
-  const questionId = payload.id || `question-${Date.now()}`;
+): Promise<
+  ApiResponse<{
+    id: string;
+  }>
+> {
 
-  const updatedQuestion: Question = {
-    id: questionId,
-    title: payload.title,
-    normalImageUrl: payload.normalImageBase64 || payload.normalImageUrl || '/images/security-normal.png',
-    normalImageId: payload.normalImageId,
-    riskImageUrl: payload.riskImageBase64 || payload.riskImageUrl || '/images/security-risk.png',
-    riskImageId: payload.riskImageId,
-    answers: payload.answers,
-    timeLimit: payload.timeLimit,
-    lives: payload.lives,
-    hintCount: payload.hintCount,
-    active: payload.active,
-    createdAt: new Date().toISOString(),
-  };
+  if (!adminPassword) {
 
-  // 1. Try to send to Google Apps Script
-  try {
-    const body = {
-      action: 'saveQuestion',
-      adminPassword,
-      ...payload,
+    return {
+      success: false,
+
+      error:
+        "관리자 인증 정보가 없습니다.",
     };
+  }
 
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
-      },
-      body: JSON.stringify(body),
-      redirect: 'follow',
+
+  const result =
+    await postToAppsScript<{
+      id: string;
+    }>({
+      action:
+        "saveQuestion",
+
+      adminPassword,
+
+      ...payload,
     });
 
-    const parsed = await parseAppsScriptResponse<{ id: string }>(res);
-    if (parsed.success && parsed.data?.id) {
-      updatedQuestion.id = parsed.data.id;
-    }
-  } catch {
-    // Continue and save to local storage
+
+  /**
+   * Apps Script 현재 응답:
+   *
+   * {
+   *   success: true,
+   *   id: "...",
+   *   message: "..."
+   * }
+   */
+  if (
+    result.success === true &&
+    result.id
+  ) {
+
+    /**
+     * 새 이미지가 저장됐을 수 있으므로
+     * 기존 이미지 캐시 제거
+     */
+    clearImageCache();
+
+
+    return {
+      success: true,
+
+      data: {
+        id:
+          String(
+            result.id
+          ),
+      },
+
+      message:
+        result.message ||
+        "문제가 저장되었습니다.",
+    };
   }
 
-  // 2. Persist in local storage so it remains after page refresh
-  const existingIdx = currentLocal.findIndex((q) => q.id === questionId);
-  if (existingIdx >= 0) {
-    currentLocal[existingIdx] = updatedQuestion;
-  } else {
-    currentLocal.unshift(updatedQuestion);
+
+  /**
+   * 향후 data.id 구조도 지원
+   */
+  if (
+    result.success === true &&
+    result.data &&
+    typeof result.data ===
+      "object" &&
+    "id" in result.data
+  ) {
+
+    const responseData =
+      result.data as {
+        id: string;
+      };
+
+
+    clearImageCache();
+
+
+    return {
+      success: true,
+
+      data: {
+        id:
+          String(
+            responseData.id
+          ),
+      },
+
+      message:
+        result.message ||
+        "문제가 저장되었습니다.",
+    };
   }
-  saveLocalQuestions(currentLocal);
+
 
   return {
-    success: true,
-    data: { id: updatedQuestion.id },
+    success: false,
+
+    error:
+      result.error ||
+      "문제를 저장하지 못했습니다.",
   };
 }
 
-/**
- * 6. Delete question
- */
+
+/* =========================================================
+   11. 문제 삭제
+========================================================= */
+
 export async function deleteQuestion(
   id: string,
   adminPassword: string
-): Promise<ApiResponse<{ deleted: boolean }>> {
-  try {
-    const body = {
-      action: 'deleteQuestion',
-      adminPassword,
-      id,
-    };
+): Promise<
+  ApiResponse<{
+    deleted: boolean;
+  }>
+> {
 
-    await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
-      },
-      body: JSON.stringify(body),
-      redirect: 'follow',
-    });
-  } catch {
-    // Continue and delete from local storage
+  if (!id) {
+
+    return {
+      success: false,
+
+      error:
+        "삭제할 문제 ID가 없습니다.",
+    };
   }
 
-  const currentLocal = getLocalQuestions();
-  const filtered = currentLocal.filter((q) => q.id !== id);
-  saveLocalQuestions(filtered);
+
+  if (!adminPassword) {
+
+    return {
+      success: false,
+
+      error:
+        "관리자 인증 정보가 없습니다.",
+    };
+  }
+
+
+  const result =
+    await postToAppsScript({
+      action:
+        "deleteQuestion",
+
+      adminPassword,
+
+      id,
+    });
+
+
+  if (!result.success) {
+
+    return {
+      success: false,
+
+      error:
+        result.error ||
+        "문제를 삭제하지 못했습니다.",
+    };
+  }
+
+
+  clearImageCache();
+
 
   return {
     success: true,
-    data: { deleted: true },
+
+    data: {
+      deleted:
+        true,
+    },
+
+    message:
+      result.message ||
+      "문제가 삭제되었습니다.",
   };
 }
 
-/**
- * 7. Toggle question active status
- */
+
+/* =========================================================
+   12. 문제 활성 / 비활성
+========================================================= */
+
 export async function toggleQuestion(
   id: string,
   active: boolean,
   adminPassword: string
-): Promise<ApiResponse<{ active: boolean }>> {
-  try {
-    const body = {
-      action: 'toggleQuestion',
-      adminPassword,
-      id,
-      active,
+): Promise<
+  ApiResponse<{
+    active: boolean;
+  }>
+> {
+
+  if (!id) {
+
+    return {
+      success: false,
+
+      error:
+        "문제 ID가 없습니다.",
     };
+  }
 
-    await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
-      },
-      body: JSON.stringify(body),
-      redirect: 'follow',
+
+  if (!adminPassword) {
+
+    return {
+      success: false,
+
+      error:
+        "관리자 인증 정보가 없습니다.",
+    };
+  }
+
+
+  const result =
+    await postToAppsScript({
+      action:
+        "toggleQuestion",
+
+      adminPassword,
+
+      id,
+
+      active,
     });
-  } catch {
-    // Continue and toggle in local storage
+
+
+  if (!result.success) {
+
+    return {
+      success: false,
+
+      error:
+        result.error ||
+        "문제 상태를 변경하지 못했습니다.",
+    };
   }
 
-  const currentLocal = getLocalQuestions();
-  const item = currentLocal.find((q) => q.id === id);
-  if (item) {
-    item.active = active;
-    saveLocalQuestions(currentLocal);
-  }
 
   return {
     success: true,
-    data: { active },
+
+    data: {
+      active:
+        typeof result.active ===
+        "boolean"
+          ? result.active
+          : active,
+    },
+
+    message:
+      result.message ||
+      (
+        active
+          ? "문제가 활성화되었습니다."
+          : "문제가 비활성화되었습니다."
+      ),
+  };
+}
+
+
+/* =========================================================
+   Question 데이터 정규화
+========================================================= */
+
+function normalizeQuestion(
+  question: Question
+): Question {
+
+  return {
+
+    ...question,
+
+
+    id:
+      String(
+        question.id
+      ),
+
+
+    title:
+      question.title ||
+      "보안 위험 찾기",
+
+
+    /**
+     * 새 구조에서는 빈 문자열이어도 정상
+     */
+    normalImageUrl:
+      question.normalImageUrl ||
+      "",
+
+
+    normalImageId:
+      question.normalImageId
+        ? String(
+            question.normalImageId
+          )
+        : undefined,
+
+
+    riskImageUrl:
+      question.riskImageUrl ||
+      "",
+
+
+    riskImageId:
+      question.riskImageId
+        ? String(
+            question.riskImageId
+          )
+        : undefined,
+
+
+    answers:
+      Array.isArray(
+        question.answers
+      )
+        ? question.answers.map(
+            (
+              answer,
+              index
+            ) => ({
+
+              ...answer,
+
+
+              id:
+                Number(
+                  answer.id ??
+                  index + 1
+                ),
+
+
+              x:
+                Number(
+                  answer.x
+                ),
+
+
+              y:
+                Number(
+                  answer.y
+                ),
+
+
+              radius:
+                Number(
+                  answer.radius ||
+                  8
+                ),
+
+
+              title:
+                answer.title ||
+                `보안 위험 ${index + 1}`,
+
+
+              hint:
+                answer.hint ||
+                "",
+
+
+              explanation:
+                answer.explanation ||
+                "",
+            })
+          )
+        : [],
+
+
+    timeLimit:
+      Number(
+        question.timeLimit ||
+        60
+      ),
+
+
+    lives:
+      Number(
+        question.lives ||
+        3
+      ),
+
+
+    hintCount:
+      Number(
+        question.hintCount ||
+        1
+      ),
+
+
+    active:
+      question.active ===
+        true ||
+      String(
+        question.active
+      ).toLowerCase() ===
+        "true",
   };
 }

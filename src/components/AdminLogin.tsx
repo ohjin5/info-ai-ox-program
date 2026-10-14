@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, ArrowRight, ShieldAlert, KeyRound } from 'lucide-react';
+import { Lock, ArrowLeft, Loader2 } from 'lucide-react';
 
 interface AdminLoginProps {
   onLogin: (password: string) => void;
@@ -7,84 +7,150 @@ interface AdminLoginProps {
   isLoading?: boolean;
 }
 
-export const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, error, isLoading }) => {
+export const AdminLogin: React.FC<AdminLoginProps> = ({
+  onLogin,
+  error,
+  isLoading = false,
+}) => {
   const [password, setPassword] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password.trim()) return;
-    onLogin(password.trim());
+
+    const trimmedPassword = password.trim();
+
+    if (!trimmedPassword || isLoading) {
+      return;
+    }
+
+    onLogin(trimmedPassword);
   };
 
   return (
-    <div className="w-full max-w-md mx-auto my-auto p-4 animate-fade-in text-slate-900">
-      <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
-        {/* Header */}
-        <div className="p-8 text-center bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 text-white">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-blue-600/30 border border-blue-400/40 flex items-center justify-center mb-3">
-            <KeyRound className="w-7 h-7 text-blue-400" />
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6 py-10">
+      <div className="w-full max-w-sm">
+        <div className="mb-8">
+          <a
+            href="#/"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            게임으로 돌아가기
+          </a>
+        </div>
+
+        <div className="mb-8">
+          <div className="w-10 h-10 rounded-lg bg-slate-900 flex items-center justify-center mb-5">
+            <Lock className="w-5 h-5 text-white" />
           </div>
-          <h2 className="text-2xl font-black tracking-tight">관리자 인증</h2>
-          <p className="text-xs text-blue-200/80 mt-1">
-            보안 위험 찾기 문제 관리 시스템
+
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            관리자 로그인
+          </h1>
+
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            문제 등록 및 설정 관리를 위해
+            관리자 비밀번호를 입력해주세요.
           </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-5">
+        <form onSubmit={handleSubmit}>
+          <div>
+            <label
+              htmlFor="admin-password"
+              className="block mb-2 text-sm font-medium text-slate-700"
+            >
+              비밀번호
+            </label>
+
+            <input
+              id="admin-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="관리자 비밀번호"
+              required
+              autoFocus
+              autoComplete="current-password"
+              disabled={isLoading}
+              className="
+                w-full
+                h-12
+                rounded-lg
+                border
+                border-slate-300
+                bg-white
+                px-4
+                text-sm
+                text-slate-900
+                outline-none
+                transition
+                placeholder:text-slate-400
+                focus:border-slate-600
+                focus:ring-1
+                focus:ring-slate-600
+                disabled:bg-slate-100
+                disabled:text-slate-500
+              "
+            />
+          </div>
+
           {error && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
+            <div
+              role="alert"
+              className="
+                mt-3
+                rounded-lg
+                border
+                border-red-200
+                bg-red-50
+                px-4
+                py-3
+                text-sm
+                text-red-700
+              "
+            >
+              {error}
             </div>
           )}
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">관리자 비밀번호</label>
-            <div className="relative">
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="관리자 암호를 입력하세요"
-                required
-                autoFocus
-                className="w-full px-4 py-3 pl-10 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-              />
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            </div>
-            <p className="text-[11px] text-slate-500">
-              * 비밀번호는 브라우저 세션 중에만 유지되며 안전하게 전송됩니다.
-            </p>
-          </div>
 
           <button
             type="submit"
             disabled={isLoading || !password.trim()}
-            className="w-full py-3.5 px-4 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-slate-400 transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+            className="
+              mt-5
+              flex
+              h-12
+              w-full
+              items-center
+              justify-center
+              gap-2
+              rounded-lg
+              bg-slate-900
+              px-4
+              text-sm
+              font-semibold
+              text-white
+              transition
+              hover:bg-slate-800
+              disabled:cursor-not-allowed
+              disabled:bg-slate-300
+            "
           >
             {isLoading ? (
               <>
-                <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                <span>확인 중...</span>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                확인 중...
               </>
             ) : (
-              <>
-                <span>관리자 로그인</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
+              '로그인'
             )}
           </button>
-
-          <div className="pt-2 text-center">
-            <a
-              href="#/"
-              className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors inline-flex items-center gap-1"
-            >
-              <span>← 게임으로 돌아가기</span>
-            </a>
-          </div>
         </form>
+
+        <p className="mt-5 text-xs leading-5 text-slate-400">
+          관리자 비밀번호는 현재 브라우저 세션에서만 사용됩니다.
+        </p>
       </div>
     </div>
   );
