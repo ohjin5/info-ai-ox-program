@@ -14,6 +14,9 @@ import {
   Settings,
   Search,
   Sparkles,
+  MousePointer2,
+  ListChecks,
+  CheckCircle2,
 } from 'lucide-react';
 
 import {
@@ -22,8 +25,15 @@ import {
 
 
 interface StartScreenProps {
+
   gameTitle?: string;
 
+  /*
+   * 이제 의미는
+   * "이번 게임에서 풀 문제 수"
+   *
+   * 현재 GamePage에서는 3 전달
+   */
   totalRisksCount: number;
 
   timeLimit: number;
@@ -44,6 +54,7 @@ interface StartScreenProps {
 
 export const StartScreen:
 React.FC<StartScreenProps> = ({
+
   gameTitle =
     DEFAULT_CONFIG.gameTitle,
 
@@ -62,6 +73,7 @@ React.FC<StartScreenProps> = ({
   imageLoadError,
 
   onRetryImageLoad,
+
 }) => {
 
   return (
@@ -81,7 +93,7 @@ React.FC<StartScreenProps> = ({
     >
 
       {/* =====================================================
-          관리자 버튼
+          관리자
       ===================================================== */}
 
       <div
@@ -153,7 +165,7 @@ React.FC<StartScreenProps> = ({
       >
 
         {/* ===================================================
-            Campaign Banner
+            상단 캠페인 영역
         =================================================== */}
 
         <div
@@ -161,11 +173,11 @@ React.FC<StartScreenProps> = ({
             relative
             overflow-hidden
             px-6
-            py-10
+            py-9
             sm:px-10
-            sm:py-12
+            sm:py-11
             lg:px-14
-            lg:py-14
+            lg:py-12
             text-center
             bg-gradient-to-br
             from-sky-50
@@ -176,7 +188,7 @@ React.FC<StartScreenProps> = ({
           "
         >
 
-          {/* Decorative background */}
+          {/* 장식 */}
 
           <div
             className="
@@ -191,6 +203,7 @@ React.FC<StartScreenProps> = ({
               pointer-events-none
             "
           />
+
 
           <div
             className="
@@ -214,7 +227,7 @@ React.FC<StartScreenProps> = ({
             "
           >
 
-            {/* Campaign badge */}
+            {/* 캠페인 뱃지 */}
 
             <div
               className="
@@ -251,7 +264,7 @@ React.FC<StartScreenProps> = ({
             </div>
 
 
-            {/* Title */}
+            {/* 제목 */}
 
             <div
               className="
@@ -274,6 +287,7 @@ React.FC<StartScreenProps> = ({
                 "
               />
 
+
               <h1
                 className="
                   font-black
@@ -292,12 +306,12 @@ React.FC<StartScreenProps> = ({
             </div>
 
 
-            {/* Description */}
+            {/* 설명 */}
 
             <p
               className="
                 text-slate-600
-                max-w-2xl
+                max-w-3xl
                 mx-auto
                 font-medium
                 leading-relaxed
@@ -305,16 +319,15 @@ React.FC<StartScreenProps> = ({
               "
               style={{
                 fontSize:
-                  'clamp(15px, 1.25vw, 21px)',
+                  'clamp(15px, 1.25vw, 20px)',
               }}
             >
-              두 사진을 비교하고,
-              일상 속에 숨어 있는
-              정보보호 위험을 찾아보세요.
+              사진 속 보안 취약점을 찾아 클릭하고,
+              어떤 정보보호 위험인지까지 맞혀보세요.
             </p>
 
 
-            {/* Risk Count */}
+            {/* 문제 수 */}
 
             <div
               className="
@@ -333,7 +346,7 @@ React.FC<StartScreenProps> = ({
               "
               style={{
                 fontSize:
-                  'clamp(15px, 1.2vw, 20px)',
+                  'clamp(14px, 1.1vw, 18px)',
               }}
             >
 
@@ -346,12 +359,13 @@ React.FC<StartScreenProps> = ({
                 "
               />
 
+
               <span>
-                숨겨진 보안 위험
+                랜덤으로 출제되는
                 {' '}
-                {totalRisksCount}개
+                {totalRisksCount}개의
                 {' '}
-                모두 찾아보기
+                보안 취약점에 도전하세요
               </span>
 
             </div>
@@ -362,19 +376,23 @@ React.FC<StartScreenProps> = ({
 
 
         {/* ===================================================
-            Game Rules
+            게임 정보
         =================================================== */}
 
         <div
           className="
             px-5
-            py-7
+            py-6
             sm:px-8
-            sm:py-9
+            sm:py-8
             lg:px-10
-            lg:py-10
+            lg:py-9
           "
         >
+
+          {/* =================================================
+              기본 규칙 카드
+          ================================================= */}
 
           <div
             className="
@@ -386,7 +404,7 @@ React.FC<StartScreenProps> = ({
             "
           >
 
-            {/* 제한 시간 */}
+            {/* 제한시간 */}
 
             <div
               className="
@@ -439,8 +457,9 @@ React.FC<StartScreenProps> = ({
                     mb-0.5
                   "
                 >
-                  제한 시간
+                  전체 제한시간
                 </div>
+
 
                 <div
                   className="
@@ -514,6 +533,7 @@ React.FC<StartScreenProps> = ({
                   기회
                 </div>
 
+
                 <div
                   className="
                     text-lg
@@ -586,6 +606,7 @@ React.FC<StartScreenProps> = ({
                   힌트
                 </div>
 
+
                 <div
                   className="
                     text-lg
@@ -605,13 +626,322 @@ React.FC<StartScreenProps> = ({
 
 
           {/* =================================================
+              게임 방법
+          ================================================= */}
+
+          <div
+            className="
+              mt-5
+              sm:mt-6
+              p-4
+              sm:p-5
+              rounded-2xl
+              bg-slate-50
+              border
+              border-slate-200
+            "
+          >
+
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+                mb-4
+              "
+            >
+
+              <ListChecks
+                className="
+                  w-5
+                  h-5
+                  text-blue-600
+                "
+              />
+
+
+              <h2
+                className="
+                  text-sm
+                  sm:text-base
+                  font-black
+                  text-slate-900
+                "
+              >
+                게임 방법
+              </h2>
+
+            </div>
+
+
+            <div
+              className="
+                grid
+                grid-cols-1
+                md:grid-cols-3
+                gap-3
+              "
+            >
+
+              {/* STEP 1 */}
+
+              <div
+                className="
+                  relative
+                  bg-white
+                  border
+                  border-slate-200
+                  rounded-2xl
+                  p-4
+                "
+              >
+
+                <div
+                  className="
+                    inline-flex
+                    items-center
+                    justify-center
+                    w-7
+                    h-7
+                    rounded-full
+                    bg-blue-600
+                    text-white
+                    text-xs
+                    font-black
+                    mb-3
+                  "
+                >
+                  1
+                </div>
+
+
+                <div
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    mb-1.5
+                  "
+                >
+
+                  <MousePointer2
+                    className="
+                      w-4
+                      h-4
+                      text-blue-600
+                    "
+                  />
+
+
+                  <div
+                    className="
+                      text-sm
+                      font-bold
+                      text-slate-900
+                    "
+                  >
+                    취약 위치 찾기
+                  </div>
+
+                </div>
+
+
+                <p
+                  className="
+                    text-xs
+                    text-slate-500
+                    leading-relaxed
+                  "
+                >
+                  사진을 보고 보안상 문제가 있다고 생각되는 부분을 클릭하세요.
+                </p>
+
+              </div>
+
+
+              {/* STEP 2 */}
+
+              <div
+                className="
+                  relative
+                  bg-white
+                  border
+                  border-slate-200
+                  rounded-2xl
+                  p-4
+                "
+              >
+
+                <div
+                  className="
+                    inline-flex
+                    items-center
+                    justify-center
+                    w-7
+                    h-7
+                    rounded-full
+                    bg-blue-600
+                    text-white
+                    text-xs
+                    font-black
+                    mb-3
+                  "
+                >
+                  2
+                </div>
+
+
+                <div
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    mb-1.5
+                  "
+                >
+
+                  <ListChecks
+                    className="
+                      w-4
+                      h-4
+                      text-blue-600
+                    "
+                  />
+
+
+                  <div
+                    className="
+                      text-sm
+                      font-bold
+                      text-slate-900
+                    "
+                  >
+                    취약점 종류 맞히기
+                  </div>
+
+                </div>
+
+
+                <p
+                  className="
+                    text-xs
+                    text-slate-500
+                    leading-relaxed
+                  "
+                >
+                  위치가 맞으면 4개의 보기 중 해당 보안 취약점 종류를 선택하세요.
+                </p>
+
+              </div>
+
+
+              {/* STEP 3 */}
+
+              <div
+                className="
+                  relative
+                  bg-white
+                  border
+                  border-slate-200
+                  rounded-2xl
+                  p-4
+                "
+              >
+
+                <div
+                  className="
+                    inline-flex
+                    items-center
+                    justify-center
+                    w-7
+                    h-7
+                    rounded-full
+                    bg-emerald-600
+                    text-white
+                    text-xs
+                    font-black
+                    mb-3
+                  "
+                >
+                  3
+                </div>
+
+
+                <div
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    mb-1.5
+                  "
+                >
+
+                  <CheckCircle2
+                    className="
+                      w-4
+                      h-4
+                      text-emerald-600
+                    "
+                  />
+
+
+                  <div
+                    className="
+                      text-sm
+                      font-bold
+                      text-slate-900
+                    "
+                  >
+                    3문제 모두 완료
+                  </div>
+
+                </div>
+
+
+                <p
+                  className="
+                    text-xs
+                    text-slate-500
+                    leading-relaxed
+                  "
+                >
+                  제한시간 안에 위치와 취약점 종류를 모두 맞히면 성공입니다.
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <div
+              className="
+                mt-4
+                px-3.5
+                py-2.5
+                rounded-xl
+                bg-rose-50
+                border
+                border-rose-100
+                text-xs
+                text-rose-700
+                font-semibold
+                text-center
+              "
+            >
+              잘못된 위치를 클릭하거나 4지선다를 틀리면 기회가 1회 차감됩니다.
+            </div>
+
+          </div>
+
+
+          {/* =================================================
               Start / Error
           ================================================= */}
 
           <div
             className="
-              mt-8
-              sm:mt-9
+              mt-6
+              sm:mt-7
             "
           >
 
@@ -651,7 +981,7 @@ React.FC<StartScreenProps> = ({
                   />
 
                   <span>
-                    이미지를 불러올 수 없습니다.
+                    게임 이미지를 불러올 수 없습니다.
                   </span>
 
                 </div>
@@ -664,8 +994,7 @@ React.FC<StartScreenProps> = ({
                     text-rose-600
                   "
                 >
-                  네트워크 연결을 확인한 후
-                  다시 시도해주세요.
+                  네트워크 연결을 확인한 후 다시 시도해주세요.
                 </p>
 
 
@@ -699,7 +1028,7 @@ React.FC<StartScreenProps> = ({
                   flex
                   flex-col
                   items-center
-                  gap-4
+                  gap-3
                 "
               >
 
@@ -765,7 +1094,7 @@ React.FC<StartScreenProps> = ({
                       />
 
                       <span>
-                        게임 준비 중...
+                        문제 3장 준비 중...
                       </span>
                     </>
 

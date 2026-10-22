@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   Settings,
   CircleDot,
-  SearchCheck,
+  CheckCircle2,
 } from 'lucide-react';
 
 import {
@@ -29,8 +29,19 @@ interface GameHUDProps {
 
   maxLives: number;
 
+  /*
+   * 새 게임에서는
+   * 완전히 해결한 문제 수
+   *
+   * 위치 + 4지선다까지 맞혀야 증가
+   */
   foundCount: number;
 
+  /*
+   * 이번 게임 전체 문제 수
+   *
+   * 기본 3
+   */
   totalAnswers: number;
 
   hintCount: number;
@@ -45,6 +56,7 @@ interface GameHUDProps {
 
 export const GameHUD:
 React.FC<GameHUDProps> = ({
+
   gameTitle =
     DEFAULT_CONFIG.gameTitle,
 
@@ -65,12 +77,18 @@ React.FC<GameHUDProps> = ({
   isMuted,
 
   onToggleSound,
+
 }) => {
+
+  /* =========================================================
+     시간
+  ========================================================= */
 
   const minutes =
     Math.floor(
       timeLeft / 60
     );
+
 
   const seconds =
     timeLeft % 60;
@@ -85,10 +103,31 @@ React.FC<GameHUDProps> = ({
     timeLeft > 0;
 
 
+  /* =========================================================
+     Hint
+  ========================================================= */
+
+  const isAllCompleted =
+    foundCount >=
+    totalAnswers;
+
+
   const isHintDisabled =
     hintCount <= 0 ||
-    foundCount === totalAnswers;
+    isAllCompleted;
 
+
+  /* =========================================================
+     기회 상태
+  ========================================================= */
+
+  const isLifeDanger =
+    lives <= 1;
+
+
+  /* =========================================================
+     Render
+  ========================================================= */
 
   return (
 
@@ -188,13 +227,14 @@ React.FC<GameHUDProps> = ({
               정보보호 캠페인
             </span>
 
+
             <span
               className="
                 font-black
                 text-slate-900
                 tracking-tight
                 truncate
-                max-w-[240px]
+                max-w-[220px]
                 xl:max-w-[320px]
               "
               style={{
@@ -228,7 +268,9 @@ React.FC<GameHUDProps> = ({
           "
         >
 
-          {/* Timer */}
+          {/* =================================================
+              전체 남은 시간
+          ================================================= */}
 
           <div
             className={`
@@ -276,6 +318,7 @@ React.FC<GameHUDProps> = ({
               `}
             />
 
+
             <div
               className="
                 flex
@@ -294,8 +337,9 @@ React.FC<GameHUDProps> = ({
                   mb-0.5
                 "
               >
-                남은 시간
+                전체 남은 시간
               </span>
+
 
               <span
                 className={`
@@ -322,10 +366,12 @@ React.FC<GameHUDProps> = ({
           </div>
 
 
-          {/* Opportunity */}
+          {/* =================================================
+              기회
+          ================================================= */}
 
           <div
-            className="
+            className={`
               flex
               items-center
               gap-1.5
@@ -334,23 +380,40 @@ React.FC<GameHUDProps> = ({
               sm:px-3.5
               py-1.5
               rounded-xl
-              bg-rose-50
               border
-              border-rose-100
               shrink-0
-            "
+              transition-all
+              ${
+                isLifeDanger
+                  ? `
+                    bg-rose-100
+                    border-rose-300
+                    ring-2
+                    ring-rose-100
+                  `
+                  : `
+                    bg-rose-50
+                    border-rose-100
+                  `
+              }
+            `}
             aria-label={`남은 기회 ${lives}회`}
           >
 
             <CircleDot
-              className="
+              className={`
                 w-4
                 h-4
                 sm:w-5
                 sm:h-5
-                text-rose-500
-              "
+                ${
+                  isLifeDanger
+                    ? 'text-rose-600'
+                    : 'text-rose-500'
+                }
+              `}
             />
+
 
             <div
               className="
@@ -373,17 +436,23 @@ React.FC<GameHUDProps> = ({
                 기회
               </span>
 
+
               <span
-                className="
+                className={`
                   text-base
                   sm:text-lg
                   font-black
-                  text-slate-900
                   tabular-nums
-                "
+                  ${
+                    isLifeDanger
+                      ? 'text-rose-700'
+                      : 'text-slate-900'
+                  }
+                `}
               >
                 {lives}
               </span>
+
 
               <span
                 className="
@@ -393,7 +462,8 @@ React.FC<GameHUDProps> = ({
                   text-slate-500
                 "
               >
-                회
+                /
+                {maxLives}
               </span>
 
             </div>
@@ -401,7 +471,9 @@ React.FC<GameHUDProps> = ({
           </div>
 
 
-          {/* Found Count */}
+          {/* =================================================
+              완료
+          ================================================= */}
 
           <div
             className="
@@ -420,7 +492,7 @@ React.FC<GameHUDProps> = ({
             "
           >
 
-            <SearchCheck
+            <CheckCircle2
               className="
                 w-4
                 h-4
@@ -429,6 +501,7 @@ React.FC<GameHUDProps> = ({
                 text-emerald-600
               "
             />
+
 
             <div
               className="
@@ -448,8 +521,9 @@ React.FC<GameHUDProps> = ({
                   text-slate-500
                 "
               >
-                발견
+                완료
               </span>
+
 
               <span
                 className="
@@ -463,6 +537,7 @@ React.FC<GameHUDProps> = ({
                 {foundCount}
               </span>
 
+
               <span
                 className="
                   text-xs
@@ -473,6 +548,7 @@ React.FC<GameHUDProps> = ({
               >
                 /
               </span>
+
 
               <span
                 className="
@@ -491,7 +567,9 @@ React.FC<GameHUDProps> = ({
           </div>
 
 
-          {/* Hint */}
+          {/* =================================================
+              Hint
+          ================================================= */}
 
           <button
             type="button"
@@ -551,14 +629,15 @@ React.FC<GameHUDProps> = ({
               `}
             />
 
+
             <span
               className="
                 whitespace-nowrap
               "
             >
               {
-                isHintDisabled
-                  ? '힌트 완료'
+                hintCount <= 0
+                  ? '힌트 없음'
                   : `힌트 ${hintCount}`
               }
             </span>
@@ -583,7 +662,9 @@ React.FC<GameHUDProps> = ({
           "
         >
 
-          {/* Sound */}
+          {/* =================================================
+              Sound
+          ================================================= */}
 
           <button
             type="button"
@@ -633,7 +714,9 @@ React.FC<GameHUDProps> = ({
           </button>
 
 
-          {/* Admin */}
+          {/* =================================================
+              Admin
+          ================================================= */}
 
           <Link
             to="/admin"
@@ -665,6 +748,7 @@ React.FC<GameHUDProps> = ({
                 h-3.5
               "
             />
+
 
             <span
               className="

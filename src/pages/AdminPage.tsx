@@ -4,7 +4,9 @@ import React, {
   useCallback,
 } from 'react';
 
-import { Link } from 'react-router-dom';
+import {
+  Link,
+} from 'react-router-dom';
 
 import {
   getQuestions,
@@ -17,8 +19,17 @@ import {
   type SaveQuestionPayload,
 } from '../services/apiService';
 
-import { AdminLogin } from '../components/AdminLogin';
-import { QuestionEditor } from '../components/QuestionEditor';
+import {
+  getSecurityVulnerabilityById,
+} from '../constants/securityVulnerabilities';
+
+import {
+  AdminLogin,
+} from '../components/AdminLogin';
+
+import {
+  QuestionEditor,
+} from '../components/QuestionEditor';
 
 import {
   ArrowLeft,
@@ -31,158 +42,218 @@ import {
   Trash2,
   Edit3,
   AlertCircle,
+  ImageIcon,
+  Target,
 } from 'lucide-react';
 
 
 /* =========================================================
    관리자 문제 목록 썸네일
 
-   Drive fileId
-        ↓
-   Apps Script
-        ↓
-   Base64 Data URL
-        ↓
-   img src
+   우선순위:
+   1. 신규 imageId
+   2. 기존 riskImageId
+   3. 신규 imageUrl
+   4. 기존 riskImageUrl
 ========================================================= */
 
 interface AdminThumbnailProps {
+
   fileId?: string;
+
   fallbackUrl?: string;
+
   alt: string;
 }
 
 
 const AdminThumbnail:
 React.FC<AdminThumbnailProps> = ({
+
   fileId,
+
   fallbackUrl,
+
   alt,
+
 }) => {
 
-  const [src, setSrc] =
-    useState<string>('');
-
-  const [isLoading, setIsLoading] =
-    useState<boolean>(true);
-
-  const [hasError, setHasError] =
-    useState<boolean>(false);
-
-
-  useEffect(() => {
-
-    let cancelled = false;
+  const [
+    src,
+    setSrc,
+  ] =
+    useState<string>(
+      ''
+    );
 
 
-    const loadImage = async () => {
-
-      setSrc('');
-      setIsLoading(true);
-      setHasError(false);
-
-
-      /*
-       * 신규 구조
-       * Drive fileId 우선 사용
-       */
-      if (fileId) {
-
-        try {
-
-          const result =
-            await getDriveImageDataUrl(
-              fileId
-            );
+  const [
+    isLoading,
+    setIsLoading,
+  ] =
+    useState<boolean>(
+      true
+    );
 
 
-          if (cancelled) {
+  const [
+    hasError,
+    setHasError,
+  ] =
+    useState<boolean>(
+      false
+    );
+
+
+  useEffect(
+    () => {
+
+      let cancelled =
+        false;
+
+
+      const loadImage =
+        async () => {
+
+          setSrc(
+            ''
+          );
+
+
+          setIsLoading(
+            true
+          );
+
+
+          setHasError(
+            false
+          );
+
+
+          /* -----------------------------------------------
+             Drive
+          ----------------------------------------------- */
+
+          if (
+            fileId
+          ) {
+
+            try {
+
+              const result =
+                await getDriveImageDataUrl(
+                  fileId
+                );
+
+
+              if (
+                cancelled
+              ) {
+
+                return;
+              }
+
+
+              if (
+                result.success &&
+                result.data
+              ) {
+
+                setSrc(
+                  result.data
+                );
+
+
+                setIsLoading(
+                  false
+                );
+
+
+                return;
+              }
+
+
+              console.warn(
+                '관리자 썸네일 조회 실패:',
+                result.error
+              );
+
+            } catch (error) {
+
+              console.error(
+                '관리자 썸네일 조회 오류:',
+                error
+              );
+            }
+          }
+
+
+          /* -----------------------------------------------
+             URL Fallback
+          ----------------------------------------------- */
+
+          if (
+            fallbackUrl
+          ) {
+
+            if (
+              !cancelled
+            ) {
+
+              setSrc(
+                fallbackUrl
+              );
+
+
+              setIsLoading(
+                false
+              );
+            }
+
+
             return;
           }
 
 
           if (
-            result.success &&
-            result.data
+            !cancelled
           ) {
 
-            setSrc(
-              result.data
+            setHasError(
+              true
             );
+
 
             setIsLoading(
               false
             );
-
-            return;
           }
+        };
 
 
-          console.warn(
-            '관리자 썸네일 조회 실패:',
-            result.error
-          );
-
-        } catch (error) {
-
-          console.error(
-            '관리자 썸네일 조회 오류:',
-            error
-          );
-        }
-      }
+      void loadImage();
 
 
-      /*
-       * 과거 URL 저장 데이터 호환
-       */
-      if (fallbackUrl) {
+      return () => {
 
-        if (!cancelled) {
+        cancelled =
+          true;
+      };
 
-          setSrc(
-            fallbackUrl
-          );
-
-          setIsLoading(
-            false
-          );
-        }
-
-        return;
-      }
+    },
+    [
+      fileId,
+      fallbackUrl,
+    ]
+  );
 
 
-      if (!cancelled) {
-
-        setHasError(
-          true
-        );
-
-        setIsLoading(
-          false
-        );
-      }
-    };
-
-
-    void loadImage();
-
-
-    return () => {
-
-      cancelled = true;
-    };
-
-  }, [
-    fileId,
-    fallbackUrl,
-  ]);
-
-
-  if (isLoading) {
+  if (
+    isLoading
+  ) {
 
     return (
+
       <div
         className="
           w-full
@@ -190,20 +261,22 @@ React.FC<AdminThumbnailProps> = ({
           flex
           items-center
           justify-center
-          bg-slate-900
+          bg-slate-100
         "
       >
+
         <div
           className="
-            w-4
-            h-4
+            w-5
+            h-5
             border-2
-            border-slate-500
-            border-t-white
+            border-slate-300
+            border-t-blue-600
             rounded-full
             animate-spin
           "
         />
+
       </div>
     );
   }
@@ -215,32 +288,51 @@ React.FC<AdminThumbnailProps> = ({
   ) {
 
     return (
+
       <div
         className="
           w-full
           h-full
           flex
+          flex-col
           items-center
           justify-center
-          bg-slate-800
-          text-slate-500
+          gap-1
+          bg-slate-100
+          text-slate-400
         "
       >
-        <AlertCircle
+
+        <ImageIcon
           className="
-            w-4
-            h-4
+            w-5
+            h-5
           "
         />
+
+        <span
+          className="
+            text-[10px]
+            font-semibold
+          "
+        >
+          이미지 없음
+        </span>
+
       </div>
     );
   }
 
 
   return (
+
     <img
-      src={src}
-      alt={alt}
+      src={
+        src
+      }
+      alt={
+        alt
+      }
       className="
         w-full
         h-full
@@ -258,14 +350,60 @@ React.FC<AdminThumbnailProps> = ({
 
 
 /* =========================================================
+   Question → 취약점 표시명
+========================================================= */
+
+const getQuestionVulnerabilityLabel =
+  (
+    question:
+      Question
+  ):
+    string => {
+
+    const answer =
+      question.answer ||
+      question.answers?.[0];
+
+
+    if (
+      !answer
+    ) {
+
+      return '정답 미등록';
+    }
+
+
+    if (
+      answer.vulnerabilityId
+    ) {
+
+      return (
+        getSecurityVulnerabilityById(
+          answer.vulnerabilityId
+        )?.label ||
+        answer.title ||
+        '취약점'
+      );
+    }
+
+
+    return (
+      answer.title ||
+      '취약점'
+    );
+  };
+
+
+/* =========================================================
    Admin Page
 ========================================================= */
 
 export const AdminPage:
 React.FC = () => {
 
+
   /* =========================================================
-     관리자 인증 상태
+     관리자 인증
   ========================================================= */
 
   const [
@@ -314,7 +452,7 @@ React.FC = () => {
 
 
   /* =========================================================
-     문제 목록 상태
+     문제 목록
   ========================================================= */
 
   const [
@@ -345,7 +483,7 @@ React.FC = () => {
 
 
   /* =========================================================
-     현재 선택 문제
+     선택 상태
   ========================================================= */
 
   const [
@@ -376,104 +514,135 @@ React.FC = () => {
 
 
   /* =========================================================
-     기존 브라우저 세션 비밀번호 재검증
+     통계
   ========================================================= */
 
-  useEffect(() => {
-
-    const verifyExistingSession =
-      async () => {
-
-        const savedPassword =
-          sessionStorage.getItem(
-            'hospital_admin_pw'
-          );
+  const activeCount =
+    questions.filter(
+      question =>
+        question.active
+    ).length;
 
 
-        if (!savedPassword) {
-
-          setIsCheckingSession(
-            false
-          );
-
-          return;
-        }
+  const isGameReady =
+    activeCount >=
+    3;
 
 
-        try {
+  /* =========================================================
+     기존 세션 재인증
+  ========================================================= */
 
-          const res =
-            await verifyAdminPassword(
-              savedPassword
-            );
+  useEffect(
+    () => {
+
+      const verifyExistingSession =
+        async () => {
+
+          const savedPassword =
+            sessionStorage
+              .getItem(
+                'hospital_admin_pw'
+              );
 
 
           if (
-            res.success === true &&
-            res.authenticated === true
+            !savedPassword
           ) {
 
-            setAdminPassword(
-              savedPassword
+            setIsCheckingSession(
+              false
             );
 
-            setIsAuthenticated(
-              true
+
+            return;
+          }
+
+
+          try {
+
+            const response =
+              await verifyAdminPassword(
+                savedPassword
+              );
+
+
+            if (
+              response.success ===
+                true &&
+
+              response.authenticated ===
+                true
+            ) {
+
+              setAdminPassword(
+                savedPassword
+              );
+
+
+              setIsAuthenticated(
+                true
+              );
+
+            } else {
+
+              sessionStorage
+                .removeItem(
+                  'hospital_admin_pw'
+                );
+
+
+              setAdminPassword(
+                ''
+              );
+
+
+              setIsAuthenticated(
+                false
+              );
+            }
+
+          } catch (error) {
+
+            console.error(
+              '기존 관리자 세션 검증 오류:',
+              error
             );
 
-          } else {
 
-            sessionStorage.removeItem(
-              'hospital_admin_pw'
-            );
+            sessionStorage
+              .removeItem(
+                'hospital_admin_pw'
+              );
+
 
             setAdminPassword(
               ''
             );
 
+
             setIsAuthenticated(
               false
             );
+
+          } finally {
+
+            setIsCheckingSession(
+              false
+            );
           }
-
-        } catch (err) {
-
-          console.error(
-            '기존 관리자 세션 검증 오류:',
-            err
-          );
+        };
 
 
-          sessionStorage.removeItem(
-            'hospital_admin_pw'
-          );
+      void verifyExistingSession();
 
-
-          setAdminPassword(
-            ''
-          );
-
-
-          setIsAuthenticated(
-            false
-          );
-
-        } finally {
-
-          setIsCheckingSession(
-            false
-          );
-        }
-      };
-
-
-    void verifyExistingSession();
-
-  }, []);
+    },
+    []
+  );
 
 
   /* =========================================================
-     문제 목록 불러오기
+     문제 목록 조회
   ========================================================= */
 
   const fetchQuestions =
@@ -484,6 +653,7 @@ React.FC = () => {
           true
         );
 
+
         setError(
           null
         );
@@ -491,44 +661,51 @@ React.FC = () => {
 
         try {
 
-          const res =
+          const response =
             await getQuestions();
 
 
           if (
-            res.success &&
-            res.data
+            response.success &&
+            response.data
           ) {
 
             setQuestions(
-              res.data
+              response.data
             );
 
 
+            /*
+             * 현재 선택값이 없을 때만
+             * 첫 번째 문제 선택
+             */
             if (
-              res.data.length > 0 &&
+              response.data.length >
+                0 &&
+
               !selectedQuestionId &&
+
               !isCreatingNew
             ) {
 
               setSelectedQuestionId(
-                res.data[0].id
+                response.data[0].id
               );
             }
 
           } else {
 
             setError(
-              res.error ||
+              response.error ||
               '문제 목록을 불러오지 못했습니다.'
             );
           }
 
-        } catch (err) {
+        } catch (error) {
 
           console.warn(
             'Failed to fetch questions:',
-            err
+            error
           );
 
 
@@ -552,42 +729,49 @@ React.FC = () => {
 
 
   /* =========================================================
-     인증 완료 후 문제 목록 로딩
+     인증 완료 후 목록
   ========================================================= */
 
-  useEffect(() => {
+  useEffect(
+    () => {
 
-    if (
-      isAuthenticated
-    ) {
+      if (
+        isAuthenticated
+      ) {
 
-      void fetchQuestions();
-    }
+        void fetchQuestions();
+      }
 
-  }, [
-    isAuthenticated,
-    fetchQuestions,
-  ]);
+    },
+    [
+      isAuthenticated,
+      fetchQuestions,
+    ]
+  );
 
 
   /* =========================================================
-     관리자 로그인
+     Login
   ========================================================= */
 
   const handleLogin =
     async (
-      pw: string
+      pw:
+        string
     ) => {
 
       const password =
         pw.trim();
 
 
-      if (!password) {
+      if (
+        !password
+      ) {
 
         setLoginError(
           '관리자 비밀번호를 입력해주세요.'
         );
+
 
         return;
       }
@@ -597,6 +781,7 @@ React.FC = () => {
         true
       );
 
+
       setLoginError(
         null
       );
@@ -604,19 +789,20 @@ React.FC = () => {
 
       try {
 
-        const res =
+        const response =
           await verifyAdminPassword(
             password
           );
 
 
         if (
-          !res.success ||
-          res.authenticated !== true
+          !response.success ||
+          response.authenticated !==
+            true
         ) {
 
           setLoginError(
-            res.error ||
+            response.error ||
             '관리자 비밀번호가 올바르지 않습니다.'
           );
 
@@ -625,24 +811,27 @@ React.FC = () => {
             ''
           );
 
+
           setIsAuthenticated(
             false
           );
 
 
-          sessionStorage.removeItem(
-            'hospital_admin_pw'
-          );
+          sessionStorage
+            .removeItem(
+              'hospital_admin_pw'
+            );
 
 
           return;
         }
 
 
-        sessionStorage.setItem(
-          'hospital_admin_pw',
-          password
-        );
+        sessionStorage
+          .setItem(
+            'hospital_admin_pw',
+            password
+          );
 
 
         setAdminPassword(
@@ -654,11 +843,11 @@ React.FC = () => {
           true
         );
 
-      } catch (err) {
+      } catch (error) {
 
         console.error(
           '관리자 로그인 오류:',
-          err
+          error
         );
 
 
@@ -677,9 +866,10 @@ React.FC = () => {
         );
 
 
-        sessionStorage.removeItem(
-          'hospital_admin_pw'
-        );
+        sessionStorage
+          .removeItem(
+            'hospital_admin_pw'
+          );
 
       } finally {
 
@@ -691,15 +881,16 @@ React.FC = () => {
 
 
   /* =========================================================
-     로그아웃
+     Logout
   ========================================================= */
 
   const handleLogout =
     () => {
 
-      sessionStorage.removeItem(
-        'hospital_admin_pw'
-      );
+      sessionStorage
+        .removeItem(
+          'hospital_admin_pw'
+        );
 
 
       setAdminPassword(
@@ -734,36 +925,41 @@ React.FC = () => {
 
 
   /* =========================================================
-     문제 활성 / 비활성
+     Toggle
   ========================================================= */
 
   const handleToggleActive =
     async (
-      id: string,
-      nextActive: boolean
+      id:
+        string,
+
+      nextActive:
+        boolean
     ) => {
 
       try {
 
         /*
-         * UI 먼저 반영
+         * UI 우선 반영
          */
         setQuestions(
-          prev =>
-            prev.map(
-              q =>
-                q.id === id
+          previous =>
+            previous.map(
+              question =>
+                question.id ===
+                  id
                   ? {
-                      ...q,
+                      ...question,
+
                       active:
                         nextActive,
                     }
-                  : q
+                  : question
             )
         );
 
 
-        const res =
+        const response =
           await toggleQuestion(
             id,
             nextActive,
@@ -772,11 +968,11 @@ React.FC = () => {
 
 
         if (
-          !res.success
+          !response.success
         ) {
 
           alert(
-            res.error ||
+            response.error ||
             '상태 변경에 실패했습니다. 관리자 암호를 확인하세요.'
           );
 
@@ -784,11 +980,11 @@ React.FC = () => {
           await fetchQuestions();
         }
 
-      } catch (err) {
+      } catch (error) {
 
         console.warn(
           'Toggle active error:',
-          err
+          error
         );
 
 
@@ -803,17 +999,18 @@ React.FC = () => {
 
 
   /* =========================================================
-     문제 삭제
+     Delete
   ========================================================= */
 
   const handleDelete =
     async (
-      id: string
+      id:
+        string
     ) => {
 
       try {
 
-        const res =
+        const response =
           await deleteQuestion(
             id,
             adminPassword
@@ -821,13 +1018,14 @@ React.FC = () => {
 
 
         if (
-          res.success
+          response.success
         ) {
 
           const nextList =
             questions.filter(
-              q =>
-                q.id !== id
+              question =>
+                question.id !==
+                id
             );
 
 
@@ -842,7 +1040,8 @@ React.FC = () => {
           ) {
 
             if (
-              nextList.length > 0
+              nextList.length >
+              0
             ) {
 
               setSelectedQuestionId(
@@ -870,16 +1069,16 @@ React.FC = () => {
         } else {
 
           alert(
-            res.error ||
+            response.error ||
             '삭제에 실패했습니다. 관리자 암호를 확인하세요.'
           );
         }
 
-      } catch (err) {
+      } catch (error) {
 
         console.warn(
           'Delete question error:',
-          err
+          error
         );
 
 
@@ -891,18 +1090,19 @@ React.FC = () => {
 
 
   /* =========================================================
-     문제 저장
+     Save
   ========================================================= */
 
   const handleSaveQuestion =
     async (
       payload:
         SaveQuestionPayload
-    ): Promise<boolean> => {
+    ):
+      Promise<boolean> => {
 
       try {
 
-        const res =
+        const response =
           await saveQuestion(
             payload,
             adminPassword
@@ -910,8 +1110,8 @@ React.FC = () => {
 
 
         if (
-          res.success &&
-          res.data?.id
+          response.success &&
+          response.data?.id
         ) {
 
           setIsCreatingNew(
@@ -920,7 +1120,7 @@ React.FC = () => {
 
 
           setSelectedQuestionId(
-            res.data.id
+            response.data.id
           );
 
 
@@ -928,23 +1128,22 @@ React.FC = () => {
 
 
           return true;
-
-        } else {
-
-          alert(
-            res.error ||
-            '저장에 실패했습니다. 관리자 암호를 확인해주세요.'
-          );
-
-
-          return false;
         }
 
-      } catch (err) {
+
+        alert(
+          response.error ||
+          '저장에 실패했습니다. 관리자 암호를 확인해주세요.'
+        );
+
+
+        return false;
+
+      } catch (error) {
 
         console.warn(
           'Save question error:',
-          err
+          error
         );
 
 
@@ -959,7 +1158,7 @@ React.FC = () => {
 
 
   /* =========================================================
-     현재 Editor에 표시할 문제
+     현재 Editor 문제
   ========================================================= */
 
   const activeQuestion =
@@ -967,8 +1166,8 @@ React.FC = () => {
       ? null
       : (
           questions.find(
-            q =>
-              q.id ===
+            question =>
+              question.id ===
               selectedQuestionId
           ) ||
           questions[0] ||
@@ -977,7 +1176,7 @@ React.FC = () => {
 
 
   /* =========================================================
-     기존 세션 검사 중
+     세션 검사
   ========================================================= */
 
   if (
@@ -1019,6 +1218,7 @@ React.FC = () => {
             "
           />
 
+
           <span>
             관리자 인증 확인 중...
           </span>
@@ -1048,7 +1248,7 @@ React.FC = () => {
     >
 
       {/* =====================================================
-          로그인 화면
+          로그인
       ===================================================== */}
 
       {!isAuthenticated ? (
@@ -1096,7 +1296,7 @@ React.FC = () => {
         >
 
           {/* =================================================
-              상단 Navigation
+              Header
           ================================================= */}
 
           <header
@@ -1116,55 +1316,45 @@ React.FC = () => {
             "
           >
 
-            {/* 게임으로 돌아가기 */}
+            {/* Game */}
 
-            <div
+            <Link
+              to="/"
               className="
-                flex
+                inline-flex
                 items-center
-                gap-3
+                gap-2
+                px-3.5
+                py-2
+                rounded-lg
+                text-xs
+                sm:text-sm
+                font-semibold
+                text-slate-700
+                hover:text-slate-900
+                bg-slate-100
+                hover:bg-slate-200
+                border
+                border-slate-200
+                transition-colors
               "
             >
 
-              <Link
-                to="/"
+              <ArrowLeft
                 className="
-                  inline-flex
-                  items-center
-                  gap-2
-                  px-3.5
-                  py-2
-                  rounded-lg
-                  text-xs
-                  sm:text-sm
-                  font-semibold
-                  text-slate-700
-                  hover:text-slate-900
-                  bg-slate-100
-                  hover:bg-slate-200
-                  border
-                  border-slate-200
-                  transition-colors
+                  w-4
+                  h-4
                 "
-              >
+              />
 
-                <ArrowLeft
-                  className="
-                    w-4
-                    h-4
-                  "
-                />
+              <span>
+                게임으로 돌아가기
+              </span>
 
-                <span>
-                  게임으로 돌아가기
-                </span>
-
-              </Link>
-
-            </div>
+            </Link>
 
 
-            {/* 중앙 타이틀 */}
+            {/* Title */}
 
             <div
               className="
@@ -1208,13 +1398,13 @@ React.FC = () => {
                   sm:inline
                 "
               >
-                보안 위험 찾기 관리자
+                보안 취약점 게임 관리자
               </h1>
 
             </div>
 
 
-            {/* 우측 버튼 */}
+            {/* Utility */}
 
             <div
               className="
@@ -1302,6 +1492,73 @@ React.FC = () => {
 
 
           {/* =================================================
+              준비 상태
+          ================================================= */}
+
+          <div
+            className={`
+              px-4
+              sm:px-6
+              py-2.5
+              border-b
+              text-xs
+              sm:text-sm
+              font-semibold
+              flex
+              items-center
+              justify-center
+              gap-2
+              ${
+                isGameReady
+                  ? `
+                    bg-emerald-50
+                    border-emerald-100
+                    text-emerald-700
+                  `
+                  : `
+                    bg-amber-50
+                    border-amber-100
+                    text-amber-800
+                  `
+              }
+            `}
+          >
+
+            {
+              isGameReady
+
+                ? (
+                  <CheckCircle2
+                    className="
+                      w-4
+                      h-4
+                    "
+                  />
+                )
+
+                : (
+                  <AlertCircle
+                    className="
+                      w-4
+                      h-4
+                    "
+                  />
+                )
+            }
+
+
+            <span>
+              {
+                isGameReady
+                  ? `활성 문제 ${activeCount}개 · 게임 시작 시 이 중 랜덤 3개가 출제됩니다.`
+                  : `현재 활성 문제 ${activeCount}개 · 게임을 진행하려면 최소 3개를 활성화해주세요.`
+              }
+            </span>
+
+          </div>
+
+
+          {/* =================================================
               Main Layout
           ================================================= */}
 
@@ -1311,13 +1568,13 @@ React.FC = () => {
               flex-1
               grid
               grid-cols-1
-              lg:grid-cols-[340px_minmax(0,1fr)]
+              lg:grid-cols-[360px_minmax(0,1fr)]
               overflow-hidden
             "
           >
 
             {/* =================================================
-                왼쪽 문제 목록
+                Sidebar
             ================================================= */}
 
             <aside
@@ -1358,8 +1615,9 @@ React.FC = () => {
                       text-slate-900
                     "
                   >
-                    문제 목록
+                    보안 취약점 문제
                   </h2>
+
 
                   <p
                     className="
@@ -1367,7 +1625,7 @@ React.FC = () => {
                       text-slate-500
                     "
                   >
-                    총 {questions.length}개 등록됨
+                    총 {questions.length}개 · 활성 {activeCount}개
                   </p>
 
                 </div>
@@ -1380,6 +1638,7 @@ React.FC = () => {
                     setIsCreatingNew(
                       true
                     );
+
 
                     setSelectedQuestionId(
                       null
@@ -1420,7 +1679,7 @@ React.FC = () => {
               </div>
 
 
-              {/* API Error */}
+              {/* Error */}
 
               {error && (
 
@@ -1453,21 +1712,23 @@ React.FC = () => {
                   </span>
 
                 </div>
+
               )}
 
 
-              {/* 문제 리스트 */}
+              {/* Question List */}
 
               <div
                 className="
                   p-3
-                  space-y-2.5
+                  space-y-3
                   flex-1
                 "
               >
 
                 {isLoading &&
-                questions.length === 0 ? (
+                questions.length ===
+                  0 ? (
 
                   <div
                     className="
@@ -1496,7 +1757,8 @@ React.FC = () => {
 
                   </div>
 
-                ) : questions.length === 0 ? (
+                ) : questions.length ===
+                  0 ? (
 
                   <div
                     className="
@@ -1530,6 +1792,7 @@ React.FC = () => {
                           true
                         );
 
+
                         setSelectedQuestionId(
                           null
                         );
@@ -1544,7 +1807,7 @@ React.FC = () => {
                         rounded-lg
                       "
                     >
-                      + 새 문제 등록
+                      + 첫 문제 등록
                     </button>
 
                   </div>
@@ -1552,18 +1815,47 @@ React.FC = () => {
                 ) : (
 
                   questions.map(
-                    q => {
+                    question => {
 
                       const isSelected =
                         !isCreatingNew &&
                         (
                           selectedQuestionId ===
-                            q.id ||
+                            question.id ||
+
                           (
                             !selectedQuestionId &&
                             activeQuestion?.id ===
-                              q.id
+                              question.id
                           )
+                        );
+
+
+                      const answer =
+                        question.answer ||
+                        question.answers?.[0];
+
+
+                      const vulnerabilityLabel =
+                        getQuestionVulnerabilityLabel(
+                          question
+                        );
+
+
+                      const thumbnailFileId =
+                        question.imageId ||
+                        question.riskImageId;
+
+
+                      const thumbnailUrl =
+                        question.imageUrl ||
+                        question.riskImageUrl;
+
+
+                      const isAnswerReady =
+                        Boolean(
+                          answer &&
+                          answer.vulnerabilityId
                         );
 
 
@@ -1571,7 +1863,7 @@ React.FC = () => {
 
                         <div
                           key={
-                            q.id
+                            question.id
                           }
                           onClick={() => {
 
@@ -1579,204 +1871,297 @@ React.FC = () => {
                               false
                             );
 
+
                             setSelectedQuestionId(
-                              q.id
+                              question.id
                             );
                           }}
                           className={`
                             p-3
-                            rounded-xl
+                            rounded-2xl
                             border
-                            transition-colors
+                            transition-all
                             cursor-pointer
                             relative
                             ${
                               isSelected
-                                ? 'bg-blue-50 border-blue-400'
-                                : 'bg-white border-slate-200 hover:border-slate-300'
+                                ? `
+                                  bg-blue-50
+                                  border-blue-400
+                                  shadow-sm
+                                `
+                                : `
+                                  bg-white
+                                  border-slate-200
+                                  hover:border-blue-200
+                                  hover:shadow-sm
+                                `
                             }
                           `}
                         >
 
                           {/* =================================
-                              썸네일
-
-                              기존:
-                              q.normalImageUrl
-                              q.riskImageUrl
-
-                              변경:
-                              Drive fileId → Base64
+                              이미지 1장
                           ================================= */}
 
                           <div
                             className="
-                              grid
-                              grid-cols-2
-                              gap-1
-                              mb-2
+                              relative
+                              w-full
+                              aspect-[16/9]
+                              bg-slate-100
+                              rounded-xl
+                              overflow-hidden
+                              mb-3
                             "
                           >
 
-                            <div
-                              className="
-                                relative
-                                aspect-[3/2]
-                                bg-slate-900
-                                rounded-md
-                                overflow-hidden
-                              "
-                            >
+                            <AdminThumbnail
+                              fileId={
+                                thumbnailFileId
+                              }
+                              fallbackUrl={
+                                thumbnailUrl
+                              }
+                              alt={
+                                question.title
+                              }
+                            />
 
-                              <AdminThumbnail
-                                fileId={
-                                  q.normalImageId
-                                }
-                                fallbackUrl={
-                                  q.normalImageUrl
-                                }
-                                alt="정상 이미지"
-                              />
 
-                            </div>
-
+                            {/* 활성 상태 */}
 
                             <div
                               className="
-                                relative
-                                aspect-[3/2]
-                                bg-slate-900
-                                rounded-md
-                                overflow-hidden
+                                absolute
+                                top-2
+                                left-2
                               "
                             >
 
-                              <AdminThumbnail
-                                fileId={
-                                  q.riskImageId
+                              <span
+                                className={`
+                                  inline-flex
+                                  items-center
+                                  gap-1
+                                  px-2
+                                  py-1
+                                  rounded-full
+                                  text-[10px]
+                                  font-bold
+                                  shadow-sm
+                                  backdrop-blur
+                                  ${
+                                    question.active
+                                      ? `
+                                        bg-emerald-600/90
+                                        text-white
+                                      `
+                                      : `
+                                        bg-slate-700/85
+                                        text-white
+                                      `
+                                  }
+                                `}
+                              >
+
+                                {
+                                  question.active
+                                    ? (
+                                      <CheckCircle2
+                                        className="
+                                          w-3
+                                          h-3
+                                        "
+                                      />
+                                    )
+                                    : (
+                                      <XCircle
+                                        className="
+                                          w-3
+                                          h-3
+                                        "
+                                      />
+                                    )
                                 }
-                                fallbackUrl={
-                                  q.riskImageUrl
+
+                                {
+                                  question.active
+                                    ? '출제 중'
+                                    : '비활성'
                                 }
-                                alt="위험 이미지"
-                              />
+
+                              </span>
 
                             </div>
 
                           </div>
 
 
-                          {/* 제목 */}
+                          {/* =================================
+                              문제명
+                          ================================= */}
+
+                          <h3
+                            className="
+                              font-bold
+                              text-xs
+                              sm:text-sm
+                              text-slate-900
+                              truncate
+                            "
+                            title={
+                              question.title
+                            }
+                          >
+                            {question.title}
+                          </h3>
+
+
+                          {/* =================================
+                              취약점
+                          ================================= */}
 
                           <div
-                            className="
+                            className={`
+                              mt-2
+                              px-2.5
+                              py-2
+                              rounded-lg
+                              border
                               flex
                               items-center
-                              justify-between
-                              gap-1
-                              mb-1
-                            "
+                              gap-2
+                              ${
+                                isAnswerReady
+                                  ? `
+                                    bg-emerald-50
+                                    border-emerald-100
+                                  `
+                                  : `
+                                    bg-amber-50
+                                    border-amber-200
+                                  `
+                              }
+                            `}
                           >
 
-                            <h3
-                              className="
-                                font-semibold
-                                text-xs
-                                text-slate-900
-                                truncate
-                              "
-                            >
-                              {q.title}
-                            </h3>
+                            <Target
+                              className={`
+                                w-3.5
+                                h-3.5
+                                shrink-0
+                                ${
+                                  isAnswerReady
+                                    ? 'text-emerald-600'
+                                    : 'text-amber-600'
+                                }
+                              `}
+                            />
 
 
                             <span
-                              className="
-                                text-[10px]
+                              className={`
+                                text-[11px]
                                 font-semibold
-                                text-blue-700
-                                bg-blue-100
-                                px-1.5
-                                py-0.5
-                                rounded
-                                shrink-0
-                              "
+                                truncate
+                                ${
+                                  isAnswerReady
+                                    ? 'text-emerald-800'
+                                    : 'text-amber-800'
+                                }
+                              `}
                             >
-                              {q.answers?.length || 0}개
+                              {vulnerabilityLabel}
                             </span>
 
                           </div>
 
 
-                          {/* 하단 Action */}
+                          {/* =================================
+                              Actions
+                          ================================= */}
 
                           <div
                             className="
                               flex
                               items-center
                               justify-between
-                              pt-1.5
+                              pt-2.5
+                              mt-2.5
                               border-t
                               border-slate-100
                               text-[11px]
                             "
-                            onClick={e =>
-                              e.stopPropagation()
+                            onClick={
+                              event =>
+                                event
+                                  .stopPropagation()
                             }
                           >
 
-                            {/* 활성/비활성 */}
+                            {/* 활성 */}
 
                             <button
                               type="button"
                               onClick={() =>
                                 void handleToggleActive(
-                                  q.id,
-                                  !q.active
+                                  question.id,
+                                  !question.active
                                 )
                               }
                               className={`
                                 inline-flex
                                 items-center
                                 gap-1
-                                px-1.5
-                                py-0.5
+                                px-2
+                                py-1
                                 rounded-md
                                 font-medium
                                 text-[10px]
+                                transition-colors
                                 ${
-                                  q.active
-                                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                  question.active
+                                    ? `
+                                      bg-emerald-100
+                                      text-emerald-800
+                                      hover:bg-emerald-200
+                                    `
+                                    : `
+                                      bg-slate-100
+                                      text-slate-500
+                                      hover:bg-slate-200
+                                    `
                                 }
                               `}
                             >
 
-                              {q.active ? (
-
-                                <CheckCircle2
-                                  className="
-                                    w-3
-                                    h-3
-                                    text-emerald-600
-                                  "
-                                />
-
-                              ) : (
-
-                                <XCircle
-                                  className="
-                                    w-3
-                                    h-3
-                                    text-slate-400
-                                  "
-                                />
-                              )}
+                              {
+                                question.active
+                                  ? (
+                                    <CheckCircle2
+                                      className="
+                                        w-3
+                                        h-3
+                                        text-emerald-600
+                                      "
+                                    />
+                                  )
+                                  : (
+                                    <XCircle
+                                      className="
+                                        w-3
+                                        h-3
+                                        text-slate-400
+                                      "
+                                    />
+                                  )
+                              }
 
 
                               <span>
                                 {
-                                  q.active
+                                  question.active
                                     ? '출제 중'
                                     : '비활성'
                                 }
@@ -1784,8 +2169,6 @@ React.FC = () => {
 
                             </button>
 
-
-                            {/* 수정 / 삭제 */}
 
                             <div
                               className="
@@ -1803,17 +2186,18 @@ React.FC = () => {
                                     false
                                   );
 
+
                                   setSelectedQuestionId(
-                                    q.id
+                                    question.id
                                   );
                                 }}
                                 title="문제 수정"
                                 className="
-                                  p-1
+                                  p-1.5
                                   text-slate-500
                                   hover:text-blue-600
                                   hover:bg-blue-50
-                                  rounded
+                                  rounded-md
                                 "
                               >
 
@@ -1831,16 +2215,16 @@ React.FC = () => {
                                 type="button"
                                 onClick={() =>
                                   setDeleteConfirmId(
-                                    q.id
+                                    question.id
                                   )
                                 }
                                 title="문제 삭제"
                                 className="
-                                  p-1
+                                  p-1.5
                                   text-slate-400
                                   hover:text-red-600
                                   hover:bg-red-50
-                                  rounded
+                                  rounded-md
                                 "
                               >
 
@@ -1858,6 +2242,7 @@ React.FC = () => {
                           </div>
 
                         </div>
+
                       );
                     }
                   )
@@ -1869,7 +2254,7 @@ React.FC = () => {
 
 
             {/* =================================================
-                오른쪽 편집 영역
+                Editor
             ================================================= */}
 
             <main
@@ -1903,12 +2288,14 @@ React.FC = () => {
                 onCancel={() => {
 
                   if (
-                    questions.length > 0
+                    questions.length >
+                    0
                   ) {
 
                     setIsCreatingNew(
                       false
                     );
+
 
                     setSelectedQuestionId(
                       questions[0].id
@@ -1923,7 +2310,7 @@ React.FC = () => {
 
 
           {/* =================================================
-              삭제 확인 Modal
+              삭제 확인
           ================================================= */}
 
           {deleteConfirmId && (
@@ -1944,7 +2331,7 @@ React.FC = () => {
               <div
                 className="
                   bg-white
-                  rounded-xl
+                  rounded-2xl
                   shadow-xl
                   max-w-sm
                   w-full
@@ -1971,7 +2358,7 @@ React.FC = () => {
                     leading-relaxed
                   "
                 >
-                  정말 삭제하시겠습니까?
+                  정말 이 보안 취약점 문제를 삭제하시겠습니까?
                   <br />
                   삭제된 문제는 복구할 수 없습니다.
                 </p>
@@ -2044,6 +2431,7 @@ React.FC = () => {
               </div>
 
             </div>
+
           )}
 
         </div>

@@ -1,14 +1,14 @@
 import React, {
+  useCallback,
+  useEffect,
   useRef,
   useState,
-  useEffect,
-  useCallback,
 } from 'react';
 
 import {
-  CheckCircle2,
+  Crosshair,
   Search,
-  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react';
 
 import type {
@@ -22,65 +22,155 @@ import {
 } from '../utils/imageCoordinates';
 
 import {
-  AnswerMarker,
   WrongClickMarker,
 } from './AnswerMarker';
 
 
-interface ImageComparisonProps {
-  normalImageUrl: string;
-  riskImageUrl: string;
-  answers: SecurityAnswer[];
-  foundAnswerIds: number[];
+/* =========================================================
+   Props
+========================================================= */
 
-  onCorrectAnswer: (
-    answer: SecurityAnswer
+interface ImageComparisonProps {
+
+  /*
+   * 참가자에게 보여줄
+   * 보안 취약점 이미지 1장
+   */
+  imageUrl:
+    string;
+
+
+  /*
+   * 해당 사진에서
+   * 정답으로 인정할 위치 전체
+   *
+   * ex)
+   * answers[0] = 왼쪽 모니터
+   * answers[1] = 오른쪽 모니터
+   *
+   * 둘 중 하나만 눌러도 정답
+   */
+  answers:
+    SecurityAnswer[];
+
+
+  /*
+   * 현재 사진에서
+   * 위치를 이미 찾았는지 여부
+   */
+  locationFound:
+    boolean;
+
+
+  /*
+   * 위치 정답
+   *
+   * 실제로 사용자가 누른
+   * 정답 위치 정보를 전달
+   */
+  onLocationFound: (
+    answer:
+      SecurityAnswer
   ) => void;
 
-  onWrongClick: () => void;
 
-  activeExplanation: {
-    title: string;
-    text: string;
-  } | null;
+  /*
+   * 위치 오답
+   */
+  onWrongClick:
+    () => void;
 
-  isGameOver: boolean;
+
+  /*
+   * 정답 위치 발견 후
+   * 또는 게임 종료 시 이미지 클릭 잠금
+   */
+  isLocked:
+    boolean;
 }
 
 
+/* =========================================================
+   ImageComparison
+========================================================= */
+
 export const ImageComparison:
 React.FC<ImageComparisonProps> = ({
-  normalImageUrl,
-  riskImageUrl,
+
+  imageUrl,
+
   answers,
-  foundAnswerIds,
-  onCorrectAnswer,
+
+  locationFound,
+
+  onLocationFound,
+
   onWrongClick,
-  activeExplanation,
-  isGameOver,
+
+  isLocked,
+
 }) => {
 
-  const riskImgRef =
+  /* =========================================================
+     Refs
+  ========================================================= */
+
+  const imgRef =
     useRef<HTMLImageElement>(
       null
     );
 
+
+  /*
+   * 연속 클릭 방지
+   */
   const clickLockRef =
     useRef<boolean>(
       false
     );
 
 
+  const wrongClickTimeoutRef =
+    useRef<
+      ReturnType<
+        typeof setTimeout
+      > |
+      null
+    >(
+      null
+    );
+
+
   /* =========================================================
-     위험 이미지 실제 렌더링 영역
+     이미지 실제 렌더링 영역
   ========================================================= */
 
   const [
-    riskBounds,
-    setRiskBounds,
+    imageBounds,
+    setImageBounds,
   ] =
     useState<
       RenderedImageBounds |
+      null
+    >(
+      null
+    );
+
+
+  /* =========================================================
+     실제로 맞힌 위치
+
+     중요:
+     locationFound=true가 되었을 때
+     사용자가 어떤 위치를 눌렀는지 표시하기 위함
+  ========================================================= */
+
+  const [
+    matchedAnswer,
+    setMatchedAnswer,
+  ] =
+    useState<
+      SecurityAnswer |
       null
     >(
       null
@@ -96,100 +186,331 @@ React.FC<ImageComparisonProps> = ({
     setWrongClickPoint,
   ] =
     useState<{
-      x: number;
-      y: number;
+      x:
+        number;
+
+      y:
+        number;
     } | null>(
       null
     );
 
 
   /* =========================================================
-     이미지 Bounds 계산
+     Bounds 업데이트
   ========================================================= */
 
-  const updateRiskBounds =
+  const updateImageBounds =
     useCallback(
       () => {
 
         if (
-          riskImgRef.current
+          !imgRef.current
         ) {
 
-          const bounds =
-            getRenderedImageBounds(
-              riskImgRef.current
-            );
-
-          setRiskBounds(
-            bounds
-          );
+          return;
         }
+
+
+        const bounds =
+          getRenderedImageBounds(
+            imgRef.current
+          );
+
+
+        setImageBounds(
+          bounds
+        );
       },
       []
     );
 
 
+  /* =========================================================
+     Resize
+  ========================================================= */
+
   useEffect(
     () => {
 
-      updateRiskBounds();
+      updateImageBounds();
+
 
       window.addEventListener(
         'resize',
-        updateRiskBounds
+        updateImageBounds
       );
+
 
       return () => {
 
         window.removeEventListener(
           'resize',
-          updateRiskBounds
+          updateImageBounds
         );
       };
 
     },
     [
-      updateRiskBounds,
+      updateImageBounds,
     ]
   );
 
 
   /* =========================================================
-     위험 이미지 클릭
+     문제 변경
   ========================================================= */
 
-  const handleRiskClick =
+  useEffect(
+    () => {
+
+      /*
+       * 이전 문제 흔적 제거
+       */
+      setWrongClickPoint(
+        null
+      );
+
+
+      setMatchedAnswer(
+        null
+      );
+
+
+      clickLockRef.current =
+        false;
+
+
+      /*
+       * 이미지 DOM 렌더링 이후
+       * Bounds 다시 계산
+       */
+      const timer =
+        window.setTimeout(
+          () => {
+
+            updateImageBounds();
+
+          },
+          0
+        );
+
+
+      return () => {
+
+        window.clearTimeout(
+          timer
+        );
+      };
+
+    },
+    [
+      imageUrl,
+      updateImageBounds,
+    ]
+  );
+
+
+  /* =========================================================
+     locationFound가 다시 false가 되면
+     다음 문제 준비
+  ========================================================= */
+
+  useEffect(
+    () => {
+
+      if (
+        !locationFound
+      ) {
+
+        setMatchedAnswer(
+          null
+        );
+
+
+        clickLockRef.current =
+          false;
+      }
+
+    },
+    [
+      locationFound,
+    ]
+  );
+
+
+  /* =========================================================
+     Cleanup
+  ========================================================= */
+
+  useEffect(
+    () => {
+
+      return () => {
+
+        if (
+          wrongClickTimeoutRef.current
+        ) {
+
+          clearTimeout(
+            wrongClickTimeoutRef.current
+          );
+        }
+      };
+
+    },
+    []
+  );
+
+
+  /* =========================================================
+     특정 Answer 안에 클릭했는지 확인
+
+     주의:
+     관리자 화면의 원과 동일하게
+     radius는 이미지 너비 기준 %로 사용
+
+     X/Y를 실제 렌더링 px로 변환해서
+     판정하기 때문에 세로/가로 비율이 달라도
+     화면에 그려진 원과 실제 클릭 범위가 일치함
+  ========================================================= */
+
+  const isPointInsideAnswer =
+    (
+      clickX:
+        number,
+
+      clickY:
+        number,
+
+      answer:
+        SecurityAnswer
+    ):
+      boolean => {
+
+    if (
+      !imageBounds
+    ) {
+
+      /*
+       * Bounds가 아직 없다면
+       * 기존 퍼센트 방식으로 fallback
+       */
+      const dx =
+        clickX -
+        answer.x;
+
+
+      const dy =
+        clickY -
+        answer.y;
+
+
+      const distance =
+        Math.sqrt(
+          dx * dx +
+          dy * dy
+        );
+
+
+      return (
+        distance <=
+        answer.radius
+      );
+    }
+
+
+    /*
+     * 이미지 퍼센트 좌표 → 실제 픽셀 거리
+     */
+    const dxPx =
+      (
+        (
+          clickX -
+          answer.x
+        ) /
+        100
+      ) *
+      imageBounds.renderedWidth;
+
+
+    const dyPx =
+      (
+        (
+          clickY -
+          answer.y
+        ) /
+        100
+      ) *
+      imageBounds.renderedHeight;
+
+
+    /*
+     * 관리자에서 radius는
+     * 이미지 너비의 % 기준
+     */
+    const radiusPx =
+      (
+        answer.radius /
+        100
+      ) *
+      imageBounds.renderedWidth;
+
+
+    const distancePx =
+      Math.sqrt(
+        dxPx * dxPx +
+        dyPx * dyPx
+      );
+
+
+    return (
+      distancePx <=
+      radiusPx
+    );
+  };
+
+
+  /* =========================================================
+     이미지 클릭
+  ========================================================= */
+
+  const handleImageClick =
     (
       e:
         React.MouseEvent<HTMLDivElement>
     ) => {
 
-      /*
-       * 게임 종료 또는
-       * 정답 안내 표시 중에는 클릭하지 않음
-       */
+      /* -------------------------------------------------------
+         잠금
+      ------------------------------------------------------- */
+
       if (
-        isGameOver ||
-        clickLockRef.current ||
-        activeExplanation
+        isLocked ||
+        locationFound ||
+        clickLockRef.current
       ) {
+
         return;
       }
 
 
       const img =
-        riskImgRef.current;
+        imgRef.current;
 
 
-      if (!img) {
+      if (
+        !img
+      ) {
+
         return;
       }
 
 
-      /*
-       * object-fit contain 기준
-       * 실제 사진 안의 좌표를 0~100%로 변환
-       */
+      /* -------------------------------------------------------
+         실제 사진 내부 좌표 계산
+      ------------------------------------------------------- */
+
       const point =
         clientPointToImagePercent(
           e.clientX,
@@ -199,92 +520,106 @@ React.FC<ImageComparisonProps> = ({
 
 
       /*
-       * 사진 바깥 여백 클릭 무시
+       * object-fit contain 여백 클릭 무시
        */
-      if (!point) {
+      if (
+        !point
+      ) {
+
         return;
       }
 
 
       const {
-        x: clickX,
-        y: clickY,
-      } = point;
+        x:
+          clickX,
+
+        y:
+          clickY,
+      } =
+        point;
 
 
       /* -------------------------------------------------------
-         정답 판정
+         등록된 모든 정답 위치 검사
+
+         ★ 핵심
+
+         정답 인정 위치가
+
+         ① 왼쪽 모니터
+         ② 오른쪽 모니터
+
+         두 개라면 둘 중 하나만 맞아도
+         matched가 반환됩니다.
       ------------------------------------------------------- */
 
-      let matchedAnswer:
-        SecurityAnswer |
-        null =
-          null;
-
-
-      for (
-        const ans of answers
-      ) {
-
-        const dx =
-          clickX -
-          ans.x;
-
-        const dy =
-          clickY -
-          ans.y;
-
-        const distance =
-          Math.sqrt(
-            dx * dx +
-            dy * dy
-          );
-
-
-        if (
-          distance <=
-          ans.radius
-        ) {
-
-          matchedAnswer =
-            ans;
-
-          break;
-        }
-      }
+      const matched =
+        answers.find(
+          answer =>
+            isPointInsideAnswer(
+              clickX,
+              clickY,
+              answer
+            )
+        );
 
 
       /* -------------------------------------------------------
-         정답
+         위치 정답
       ------------------------------------------------------- */
 
       if (
-        matchedAnswer
+        matched
       ) {
 
+        clickLockRef.current =
+          true;
+
+
         /*
-         * 이미 찾은 정답은 무시
-         * 기회도 차감하지 않음
+         * 실제로 맞힌 원 저장
          */
-        if (
-          foundAnswerIds.includes(
-            matchedAnswer.id
-          )
-        ) {
-          return;
-        }
-
-
-        onCorrectAnswer(
-          matchedAnswer
+        setMatchedAnswer(
+          matched
         );
+
+
+        /*
+         * GamePage로 전달
+         *
+         * 이후:
+         * locationFound = true
+         * 4지선다 표시
+         */
+        onLocationFound(
+          matched
+        );
+
+
+        /*
+         * state 반영 후 내부 lock 해제
+         *
+         * 부모의 locationFound=true가
+         * 이후 클릭을 계속 막음
+         */
+        window.setTimeout(
+          () => {
+
+            clickLockRef.current =
+              false;
+
+          },
+          250
+        );
+
 
         return;
       }
 
 
       /* -------------------------------------------------------
-         오답
+         위치 오답
       ------------------------------------------------------- */
 
       clickLockRef.current =
@@ -292,6 +627,7 @@ React.FC<ImageComparisonProps> = ({
 
 
       setWrongClickPoint({
+
         x:
           clickX,
 
@@ -303,20 +639,57 @@ React.FC<ImageComparisonProps> = ({
       onWrongClick();
 
 
-      setTimeout(
-        () => {
+      /*
+       * 기존 오답 타이머 정리
+       */
+      if (
+        wrongClickTimeoutRef.current
+      ) {
 
-          setWrongClickPoint(
-            null
-          );
+        clearTimeout(
+          wrongClickTimeoutRef.current
+        );
+      }
 
-          clickLockRef.current =
-            false;
 
-        },
-        500
-      );
+      /*
+       * 빨간 오답 표시 후 제거
+       */
+      wrongClickTimeoutRef.current =
+        setTimeout(
+          () => {
+
+            setWrongClickPoint(
+              null
+            );
+
+
+            clickLockRef.current =
+              false;
+
+          },
+          500
+        );
     };
+
+
+  /* =========================================================
+     표시할 발견 위치
+
+     정상적인 경우 matchedAnswer 사용
+
+     혹시 외부 상태만 locationFound=true가 된 경우에는
+     첫 번째 답을 fallback으로 사용
+  ========================================================= */
+
+  const displayedMatchedAnswer =
+    matchedAnswer ||
+    (
+      locationFound
+        ? answers[0] ||
+          null
+        : null
+    );
 
 
   /* =========================================================
@@ -329,16 +702,18 @@ React.FC<ImageComparisonProps> = ({
       className="
         w-full
         flex-1
+        min-h-0
         flex
         flex-col
-        justify-center
         items-center
-        px-2
-        sm:px-4
-        md:px-6
-        py-2
+        justify-center
+        px-3
+        sm:px-5
+        md:px-7
+        pt-10
+        sm:pt-12
+        pb-3
         overflow-hidden
-        relative
         bg-gradient-to-b
         from-sky-50/70
         via-white
@@ -347,147 +722,160 @@ React.FC<ImageComparisonProps> = ({
     >
 
       {/* =====================================================
-          비교 이미지 영역
+          상단 안내
       ===================================================== */}
 
       <div
         className="
-          w-[98%]
-          max-w-[2600px]
-          h-[78vh]
-          sm:h-[80vh]
-          lg:h-[82vh]
-          grid
-          grid-cols-1
-          md:grid-cols-2
-          items-center
-          justify-center
+          w-full
+          max-w-[1600px]
+          mb-3
+          sm:mb-4
+          flex
+          flex-col
+          sm:flex-row
+          sm:items-center
+          justify-between
+          gap-2
         "
-        style={{
-          gap:
-            'clamp(8px, 1.2vw, 22px)',
-        }}
       >
-
-        {/* ===================================================
-            기준 이미지
-        =================================================== */}
 
         <div
           className="
-            relative
-            w-full
-            h-full
-            rounded-3xl
-            bg-white
-            border
-            border-sky-100
-            overflow-hidden
             flex
             items-center
-            justify-center
-            shadow-lg
-            shadow-sky-100/60
-            min-w-0
+            gap-2
           "
         >
 
-          {/* 기준 이미지 Badge */}
-
           <div
             className="
-              absolute
-              top-3
-              left-3
-              z-10
-              pointer-events-none
+              w-9
+              h-9
+              rounded-xl
+              bg-blue-50
+              border
+              border-blue-100
+              flex
+              items-center
+              justify-center
+              shrink-0
             "
           >
 
-            <div
+            <Search
               className="
-                inline-flex
-                items-center
-                gap-1.5
-                px-3
-                py-1.5
-                rounded-full
-                bg-white/90
-                border
-                border-sky-100
-                shadow-sm
-                text-[11px]
-                sm:text-xs
-                font-bold
-                text-slate-600
-                backdrop-blur-sm
+                w-4
+                h-4
+                text-blue-600
               "
-            >
-
-              <ShieldCheck
-                className="
-                  w-3.5
-                  h-3.5
-                  text-blue-600
-                "
-              />
-
-              <span>
-                기준 이미지
-              </span>
-
-            </div>
+            />
 
           </div>
 
 
-          <img
-            src={
-              normalImageUrl
-            }
-            alt="정상 이미지"
-            className="
-              w-full
-              h-full
-              max-h-[82vh]
-              object-contain
-              pointer-events-none
-              select-none
-            "
-            referrerPolicy="no-referrer"
-            draggable={
-              false
-            }
-          />
+          <div>
+
+            <h2
+              className="
+                text-sm
+                sm:text-base
+                font-black
+                text-slate-900
+              "
+            >
+              사진 속 보안 취약점을 찾아보세요
+            </h2>
+
+
+            <p
+              className="
+                text-[11px]
+                sm:text-xs
+                text-slate-500
+                mt-0.5
+              "
+            >
+              취약하다고 생각되는 부분을 직접 클릭해주세요.
+            </p>
+
+          </div>
 
         </div>
 
 
-        {/* ===================================================
-            위험 이미지
-        =================================================== */}
+        <div
+          className="
+            hidden
+            sm:inline-flex
+            items-center
+            gap-1.5
+            px-3
+            py-1.5
+            rounded-full
+            bg-white
+            border
+            border-sky-100
+            shadow-sm
+            text-xs
+            font-bold
+            text-blue-700
+          "
+        >
+
+          <Crosshair
+            className="
+              w-3.5
+              h-3.5
+            "
+          />
+
+          위치를 먼저 찾아야 합니다
+
+        </div>
+
+      </div>
+
+
+      {/* =====================================================
+          메인 이미지
+      ===================================================== */}
+
+      <div
+        className="
+          w-full
+          max-w-[1600px]
+          flex-1
+          min-h-0
+          flex
+          items-center
+          justify-center
+        "
+      >
 
         <div
           className={`
             relative
             w-full
-            h-full
+            flex-1
+            min-h-0
+            max-h-[calc(100vh-145px)]
             rounded-3xl
             bg-white
-            border-2
             overflow-hidden
+            border-2
+            shadow-xl
+            shadow-blue-100/60
             flex
             items-center
             justify-center
-            shadow-lg
-            shadow-blue-100/70
             select-none
-            min-w-0
-            transition-colors
+            transition-all
             ${
-              activeExplanation
+              isLocked ||
+              locationFound
                 ? `
-                  border-blue-200
+                  border-slate-200
                   cursor-default
                 `
                 : `
@@ -498,18 +886,22 @@ React.FC<ImageComparisonProps> = ({
             }
           `}
           onClick={
-            handleRiskClick
+            handleImageClick
           }
         >
 
-          {/* 위험 찾기 Badge */}
+          {/* =================================================
+              Badge
+          ================================================= */}
 
           <div
             className="
               absolute
               top-3
               left-3
-              z-10
+              sm:top-4
+              sm:left-4
+              z-20
               pointer-events-none
             "
           >
@@ -523,43 +915,47 @@ React.FC<ImageComparisonProps> = ({
                 py-1.5
                 rounded-full
                 bg-blue-600/95
-                shadow-sm
+                text-white
                 text-[11px]
                 sm:text-xs
-                font-bold
-                text-white
-                backdrop-blur-sm
+                font-black
+                shadow-md
+                backdrop-blur
               "
             >
 
-              <Search
+              <ShieldAlert
                 className="
                   w-3.5
                   h-3.5
                 "
               />
 
-              <span>
-                위험 요소 찾기
-              </span>
+              보안 위험 찾기
 
             </div>
 
           </div>
 
 
+          {/* =================================================
+              Image
+          ================================================= */}
+
           <img
             ref={
-              riskImgRef
+              imgRef
             }
             src={
-              riskImageUrl
+              imageUrl
             }
-            alt="보안 위험 이미지"
+            alt="보안 취약점 찾기"
             className="
-              w-full
-              h-full
-              max-h-[82vh]
+              block
+              w-auto
+              h-auto
+              max-w-full
+              max-h-full
               object-contain
               pointer-events-none
               select-none
@@ -569,7 +965,7 @@ React.FC<ImageComparisonProps> = ({
               false
             }
             onLoad={
-              updateRiskBounds
+              updateImageBounds
             }
           />
 
@@ -578,7 +974,7 @@ React.FC<ImageComparisonProps> = ({
               실제 이미지 영역 Overlay
           ================================================= */}
 
-          {riskBounds && (
+          {imageBounds && (
 
             <div
               className="
@@ -586,45 +982,120 @@ React.FC<ImageComparisonProps> = ({
                 pointer-events-none
               "
               style={{
+
                 left:
-                  `${riskBounds.offsetX}px`,
+                  `${imageBounds.offsetX}px`,
 
                 top:
-                  `${riskBounds.offsetY}px`,
+                  `${imageBounds.offsetY}px`,
 
                 width:
-                  `${riskBounds.renderedWidth}px`,
+                  `${imageBounds.renderedWidth}px`,
 
                 height:
-                  `${riskBounds.renderedHeight}px`,
+                  `${imageBounds.renderedHeight}px`,
               }}
             >
 
-              {/* 찾은 정답 */}
+              {/* =============================================
+                  실제로 클릭한 정답 위치만 표시
 
-              {answers
-                .filter(
-                  ans =>
-                    foundAnswerIds.includes(
-                      ans.id
-                    )
-                )
-                .map(
-                  ans => (
+                  등록된 정답 위치가 2개여도
+                  사용자가 누른 위치 하나만 초록색으로 표시
+              ============================================= */}
 
-                    <AnswerMarker
-                      key={
-                        ans.id
-                      }
-                      answer={
-                        ans
-                      }
-                    />
-                  )
-                )}
+              {locationFound &&
+                displayedMatchedAnswer && (
+
+                <div
+                  className="
+                    absolute
+                    -translate-x-1/2
+                    -translate-y-1/2
+                    flex
+                    items-center
+                    justify-center
+                  "
+                  style={{
+
+                    left:
+                      `${displayedMatchedAnswer.x}%`,
+
+                    top:
+                      `${displayedMatchedAnswer.y}%`,
+
+                    width:
+                      `${
+                        displayedMatchedAnswer.radius *
+                        2
+                      }%`,
+
+                    height:
+                      `${
+                        displayedMatchedAnswer.radius *
+                        2 *
+                        (
+                          imageBounds.renderedWidth /
+                          imageBounds.renderedHeight
+                        )
+                      }%`,
+                  }}
+                >
+
+                  <div
+                    className="
+                      w-full
+                      h-full
+                      rounded-full
+                      bg-emerald-500/20
+                      border-[3px]
+                      border-emerald-500
+                      ring-4
+                      ring-emerald-400/20
+                      shadow-lg
+                      flex
+                      items-center
+                      justify-center
+                    "
+                  >
+
+                    <div
+                      className="
+                        w-9
+                        h-9
+                        sm:w-11
+                        sm:h-11
+                        rounded-full
+                        bg-emerald-500
+                        text-white
+                        flex
+                        items-center
+                        justify-center
+                        shadow-lg
+                      "
+                    >
+
+                      <Crosshair
+                        className="
+                          w-5
+                          h-5
+                          sm:w-6
+                          sm:h-6
+                        "
+                      />
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              )}
 
 
-              {/* 오답 클릭 */}
+              {/* =============================================
+                  오답 클릭
+              ============================================= */}
 
               {wrongClickPoint && (
 
@@ -632,6 +1103,7 @@ React.FC<ImageComparisonProps> = ({
                   x={
                     wrongClickPoint.x
                   }
+
                   y={
                     wrongClickPoint.y
                   }
@@ -643,222 +1115,86 @@ React.FC<ImageComparisonProps> = ({
 
           )}
 
+
+          {/* =================================================
+              위치 찾은 후 안내
+          ================================================= */}
+
+          {locationFound && (
+
+            <div
+              className="
+                absolute
+                inset-x-0
+                bottom-4
+                z-20
+                flex
+                justify-center
+                pointer-events-none
+              "
+            >
+
+              <div
+                className="
+                  px-4
+                  py-2
+                  rounded-full
+                  bg-emerald-600/95
+                  text-white
+                  text-xs
+                  sm:text-sm
+                  font-black
+                  shadow-lg
+                  backdrop-blur
+                "
+              >
+                위치를 찾았습니다! 취약점 종류를 선택해주세요.
+              </div>
+
+            </div>
+
+          )}
+
         </div>
 
       </div>
 
 
       {/* =====================================================
-          중앙 정답 안내
-
-          중요:
-          pointer-events-none을 사용하지 않습니다.
-          정답 설명이 표시되는 동안 뒤쪽 클릭 차단
+          하단 안내
       ===================================================== */}
 
-      {activeExplanation && (
+      {!locationFound && (
 
         <div
           className="
-            fixed
-            inset-0
-            z-50
+            mt-3
+            sm:mt-4
             flex
             items-center
             justify-center
-            px-4
-            bg-slate-900/15
-            backdrop-blur-[2px]
-            animate-fade-in
-            cursor-default
+            gap-2
+            text-[11px]
+            sm:text-xs
+            text-slate-500
           "
         >
 
-          <div
+          <Crosshair
             className="
-              w-full
-              max-w-2xl
-              sm:max-w-3xl
-              animate-scale-in
+              w-3.5
+              h-3.5
+              text-blue-500
             "
-          >
-
-            <div
-              className="
-                relative
-                overflow-hidden
-                bg-white/97
-                backdrop-blur-xl
-                rounded-3xl
-                border-2
-                border-emerald-200
-                shadow-2xl
-                shadow-emerald-200/60
-                px-6
-                py-7
-                sm:px-10
-                sm:py-9
-                text-center
-              "
-            >
-
-              {/* 배경 장식 */}
-
-              <div
-                className="
-                  absolute
-                  -top-12
-                  -left-12
-                  w-40
-                  h-40
-                  rounded-full
-                  bg-emerald-100/60
-                  blur-3xl
-                  pointer-events-none
-                "
-              />
+          />
 
 
-              <div
-                className="
-                  absolute
-                  -bottom-14
-                  -right-10
-                  w-44
-                  h-44
-                  rounded-full
-                  bg-sky-100/70
-                  blur-3xl
-                  pointer-events-none
-                "
-              />
-
-
-              <div
-                className="
-                  relative
-                  z-10
-                "
-              >
-
-                {/* Check */}
-
-                <div
-                  className="
-                    mx-auto
-                    mb-4
-                    sm:mb-5
-                    flex
-                    items-center
-                    justify-center
-                    w-14
-                    h-14
-                    sm:w-16
-                    sm:h-16
-                    rounded-2xl
-                    bg-emerald-50
-                    border
-                    border-emerald-200
-                    text-emerald-600
-                    shadow-sm
-                  "
-                >
-
-                  <CheckCircle2
-                    className="
-                      w-7
-                      h-7
-                      sm:w-8
-                      sm:h-8
-                    "
-                  />
-
-                </div>
-
-
-                {/* 정답 표시 */}
-
-                <div
-                  className="
-                    text-sm
-                    sm:text-base
-                    font-black
-                    text-emerald-600
-                    mb-2
-                  "
-                >
-                  정답입니다!
-                </div>
-
-
-                {/* 정답 제목 */}
-
-                <h3
-                  className="
-                    font-black
-                    text-slate-900
-                    tracking-tight
-                    mb-3
-                    sm:mb-4
-                  "
-                  style={{
-                    fontSize:
-                      'clamp(24px, 2.3vw, 38px)',
-                  }}
-                >
-                  {activeExplanation.title}
-                </h3>
-
-
-                {/* 설명 */}
-
-                <p
-                  className="
-                    max-w-2xl
-                    mx-auto
-                    text-slate-600
-                    font-medium
-                    leading-relaxed
-                  "
-                  style={{
-                    fontSize:
-                      'clamp(15px, 1.25vw, 20px)',
-                  }}
-                >
-                  {activeExplanation.text}
-                </p>
-
-
-                {/* 안내 */}
-
-                <div
-                  className="
-                    mt-5
-                    sm:mt-6
-                    inline-flex
-                    items-center
-                    px-4
-                    py-2
-                    rounded-full
-                    bg-emerald-50
-                    border
-                    border-emerald-100
-                    text-xs
-                    sm:text-sm
-                    font-bold
-                    text-emerald-700
-                  "
-                >
-                  계속해서 다른 보안 위험도 찾아보세요!
-                </div>
-
-              </div>
-
-            </div>
-
-          </div>
+          <span>
+            보안상 문제가 있다고 생각되는 지점을 클릭하세요.
+          </span>
 
         </div>
+
       )}
 
     </div>

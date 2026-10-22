@@ -10,6 +10,7 @@ import {
   XCircle,
   CircleDot,
   Sparkles,
+  Target,
 } from 'lucide-react';
 
 import type {
@@ -22,77 +23,209 @@ import {
 
 
 interface ResultScreenProps {
-  isSuccess: boolean;
 
-  foundAnswers: SecurityAnswer[];
+  isSuccess:
+    boolean;
 
-  allAnswers: SecurityAnswer[];
+  /*
+   * 위치 + 4지선다까지
+   * 모두 맞힌 문제
+   */
+  foundAnswers:
+    SecurityAnswer[];
 
-  livesLeft: number;
+  /*
+   * 이번 게임에 출제된
+   * 전체 문제의 정답
+   */
+  allAnswers:
+    SecurityAnswer[];
 
-  maxLives: number;
+  livesLeft:
+    number;
 
-  timeSpent: number;
+  maxLives:
+    number;
+
+  timeSpent:
+    number;
 
   failReason:
     | 'TIME_OUT'
     | 'NO_LIVES'
     | null;
 
-  onRestart: () => void;
+  onRestart:
+    () => void;
 }
 
 
+/* =========================================================
+   Answer 동일 여부
+
+   신규 구조에서는 answer.id가
+   문제마다 1일 수 있으므로 id만 비교하지 않음
+
+   우선순위:
+   1. vulnerabilityId
+   2. title
+========================================================= */
+
+const isSameAnswer =
+  (
+    a:
+      SecurityAnswer,
+
+    b:
+      SecurityAnswer
+  ):
+    boolean => {
+
+    if (
+      a.vulnerabilityId &&
+      b.vulnerabilityId
+    ) {
+
+      return (
+        a.vulnerabilityId ===
+        b.vulnerabilityId
+      );
+    }
+
+
+    return (
+      a.title ===
+      b.title
+    );
+  };
+
+
+/* =========================================================
+   ResultScreen
+========================================================= */
+
 export const ResultScreen:
 React.FC<ResultScreenProps> = ({
+
   isSuccess,
+
   foundAnswers,
+
   allAnswers,
+
   livesLeft,
+
   maxLives,
+
   timeSpent,
+
   failReason,
+
   onRestart,
+
 }) => {
+
+
+  /* =========================================================
+     놓친 문제
+  ========================================================= */
 
   const unfoundAnswers =
     allAnswers.filter(
-      ans =>
+      answer =>
         !foundAnswers.some(
-          fa =>
-            fa.id ===
-            ans.id
+          found =>
+            isSameAnswer(
+              found,
+              answer
+            )
         )
     );
 
 
-  const foundRate =
-    allAnswers.length > 0
+  /* =========================================================
+     완료율
+  ========================================================= */
+
+  const completeRate =
+    allAnswers.length >
+      0
       ? Math.round(
           (
             foundAnswers.length /
             allAnswers.length
-          ) * 100
+          ) *
+          100
         )
       : 0;
 
 
+  /* =========================================================
+     결과 제목
+  ========================================================= */
+
+  const resultTitle =
+    isSuccess
+      ? '성공!'
+      : '실패!';
+
+
+  /* =========================================================
+     결과 설명
+  ========================================================= */
+
   const resultMessage =
     isSuccess
-      ? '숨겨진 보안 위험을 모두 발견했습니다!'
-      : failReason === 'TIME_OUT'
-        ? '시간은 종료되었지만, 놓친 보안 위험을 함께 확인해보세요.'
-        : failReason === 'NO_LIVES'
-          ? '기회를 모두 사용했습니다. 놓친 보안 위험을 확인해보세요.'
-          : '놓친 보안 위험을 함께 확인해보세요.';
+      ? '모든 보안 취약점의 위치와 유형을 정확하게 맞혔습니다.'
+      : failReason ===
+          'TIME_OUT'
+        ? '제한시간 60초가 종료되었습니다. 놓친 보안 취약점을 확인해보세요.'
+        : failReason ===
+            'NO_LIVES'
+          ? '기회를 모두 사용했습니다. 놓친 보안 취약점을 확인해보세요.'
+          : '이번에 놓친 보안 취약점을 확인해보세요.';
 
+
+  /* =========================================================
+     결과 보조 문구
+  ========================================================= */
+
+  const resultSubMessage =
+    isSuccess
+      ? '정보보호 미션을 성공적으로 완료했습니다!'
+      : failReason ===
+          'TIME_OUT'
+        ? '조금 더 빠르게 보안 위험을 찾아보세요.'
+        : failReason ===
+            'NO_LIVES'
+          ? '위치와 취약점 유형을 다시 확인해보세요.'
+          : '다시 도전해서 모든 문제를 해결해보세요.';
+
+
+  /* =========================================================
+     시간
+  ========================================================= */
+
+  const safeTimeSpent =
+    Math.max(
+      0,
+      Math.min(
+        60,
+        timeSpent
+      )
+    );
+
+
+  /* =========================================================
+     Render
+  ========================================================= */
 
   return (
 
     <div
       className="
         w-full
-        max-w-4xl
+        max-w-5xl
         mx-auto
         my-auto
         p-4
@@ -120,8 +253,8 @@ React.FC<ResultScreenProps> = ({
 
         <div
           className={`
-            p-8
-            sm:p-10
+            p-7
+            sm:p-9
             text-center
             relative
             overflow-hidden
@@ -137,14 +270,16 @@ React.FC<ResultScreenProps> = ({
                 `
                 : `
                   bg-gradient-to-br
-                  from-amber-50
+                  from-rose-50
                   via-white
-                  to-rose-50
-                  border-amber-100
+                  to-amber-50
+                  border-rose-100
                 `
             }
           `}
         >
+
+          {/* Background Decoration */}
 
           <div
             className="
@@ -160,18 +295,23 @@ React.FC<ResultScreenProps> = ({
             "
           />
 
+
           <div
-            className="
+            className={`
               absolute
               -bottom-16
               -right-12
               w-56
               h-56
               rounded-full
-              bg-emerald-100/40
               blur-3xl
               pointer-events-none
-            "
+              ${
+                isSuccess
+                  ? 'bg-emerald-100/40'
+                  : 'bg-rose-100/40'
+              }
+            `}
           />
 
 
@@ -184,6 +324,8 @@ React.FC<ResultScreenProps> = ({
               items-center
             "
           >
+
+            {/* Icon */}
 
             <div
               className={`
@@ -206,39 +348,42 @@ React.FC<ResultScreenProps> = ({
                       border-emerald-200
                     `
                     : `
-                      bg-amber-50
-                      text-amber-600
-                      border-amber-200
+                      bg-rose-50
+                      text-rose-600
+                      border-rose-200
                     `
                 }
               `}
             >
 
-              {isSuccess ? (
-
-                <Award
-                  className="
-                    w-10
-                    h-10
-                    sm:w-12
-                    sm:h-12
-                  "
-                />
-
-              ) : (
-
-                <AlertTriangle
-                  className="
-                    w-10
-                    h-10
-                    sm:w-12
-                    sm:h-12
-                  "
-                />
-              )}
+              {
+                isSuccess
+                  ? (
+                      <Award
+                        className="
+                          w-10
+                          h-10
+                          sm:w-12
+                          sm:h-12
+                        "
+                      />
+                    )
+                  : (
+                      <AlertTriangle
+                        className="
+                          w-10
+                          h-10
+                          sm:w-12
+                          sm:h-12
+                        "
+                      />
+                    )
+              }
 
             </div>
 
+
+            {/* Campaign Badge */}
 
             <div
               className="
@@ -273,30 +418,34 @@ React.FC<ResultScreenProps> = ({
             </div>
 
 
+            {/* Title */}
+
             <h2
-              className="
+              className={`
                 font-black
                 tracking-tight
-                text-slate-900
                 mb-2
-              "
+                ${
+                  isSuccess
+                    ? 'text-emerald-700'
+                    : 'text-rose-700'
+                }
+              `}
               style={{
                 fontSize:
-                  'clamp(26px, 2.5vw, 46px)',
+                  'clamp(32px, 3vw, 52px)',
               }}
             >
-              {
-                isSuccess
-                  ? '보안 위험 발견 완료!'
-                  : '도전 완료!'
-              }
+              {resultTitle}
             </h2>
 
+
+            {/* Description */}
 
             <p
               className="
                 text-slate-600
-                max-w-xl
+                max-w-2xl
                 mx-auto
                 leading-relaxed
                 font-medium
@@ -310,38 +459,61 @@ React.FC<ResultScreenProps> = ({
             </p>
 
 
-            {isSuccess && (
+            {/* Result Badge */}
 
-              <div
-                className="
-                  mt-4
-                  inline-flex
-                  items-center
-                  gap-2
-                  px-4
-                  py-2
-                  rounded-xl
-                  bg-emerald-50
-                  border
-                  border-emerald-100
-                  text-emerald-700
-                  font-bold
-                "
-              >
+            <div
+              className={`
+                mt-4
+                inline-flex
+                items-center
+                gap-2
+                px-4
+                py-2
+                rounded-xl
+                border
+                font-bold
+                ${
+                  isSuccess
+                    ? `
+                      bg-emerald-50
+                      border-emerald-100
+                      text-emerald-700
+                    `
+                    : `
+                      bg-rose-50
+                      border-rose-100
+                      text-rose-700
+                    `
+                }
+              `}
+            >
 
-                <Sparkles
-                  className="
-                    w-4
-                    h-4
-                  "
-                />
+              {
+                isSuccess
+                  ? (
+                      <Sparkles
+                        className="
+                          w-4
+                          h-4
+                        "
+                      />
+                    )
+                  : (
+                      <AlertTriangle
+                        className="
+                          w-4
+                          h-4
+                        "
+                      />
+                    )
+              }
 
-                <span>
-                  모든 위험 요소를 찾았습니다!
-                </span>
 
-              </div>
-            )}
+              <span>
+                {resultSubMessage}
+              </span>
+
+            </div>
 
           </div>
 
@@ -349,7 +521,7 @@ React.FC<ResultScreenProps> = ({
 
 
         {/* =====================================================
-            Stats
+            Content
         ===================================================== */}
 
         <div
@@ -359,6 +531,10 @@ React.FC<ResultScreenProps> = ({
             space-y-6
           "
         >
+
+          {/* ===================================================
+              Stats
+          =================================================== */}
 
           <div
             className="
@@ -370,7 +546,7 @@ React.FC<ResultScreenProps> = ({
             "
           >
 
-            {/* 발견 */}
+            {/* 완료 문제 */}
 
             <div
               className="
@@ -391,7 +567,7 @@ React.FC<ResultScreenProps> = ({
                   mb-1
                 "
               >
-                발견한 보안 위험
+                완료한 문제
               </div>
 
 
@@ -432,13 +608,13 @@ React.FC<ResultScreenProps> = ({
                   mt-1
                 "
               >
-                발견률 {foundRate}%
+                완료율 {completeRate}%
               </div>
 
             </div>
 
 
-            {/* 기회 */}
+            {/* 남은 기회 */}
 
             <div
               className="
@@ -504,7 +680,8 @@ React.FC<ResultScreenProps> = ({
                     text-slate-500
                   "
                 >
-                  회
+                  /
+                  {maxLives}
                 </span>
 
               </div>
@@ -518,13 +695,13 @@ React.FC<ResultScreenProps> = ({
                   mt-1
                 "
               >
-                시작 {maxLives}회
+                위치 또는 보기 오답 시 1회 차감
               </div>
 
             </div>
 
 
-            {/* 시간 */}
+            {/* 소요 시간 */}
 
             <div
               className="
@@ -573,10 +750,23 @@ React.FC<ResultScreenProps> = ({
                   "
                 />
 
+
                 <span>
-                  {timeSpent}초
+                  {safeTimeSpent}초
                 </span>
 
+              </div>
+
+
+              <div
+                className="
+                  text-[11px]
+                  text-slate-400
+                  font-semibold
+                  mt-1
+                "
+              >
+                전체 제한시간 60초
               </div>
 
             </div>
@@ -585,7 +775,7 @@ React.FC<ResultScreenProps> = ({
 
 
           {/* ===================================================
-              Checklist
+              출제된 보안 취약점
           =================================================== */}
 
           <div
@@ -594,50 +784,77 @@ React.FC<ResultScreenProps> = ({
             "
           >
 
-            <h3
+            <div
               className="
-                text-sm
-                sm:text-base
-                font-bold
-                text-slate-800
                 flex
-                items-center
-                gap-2
+                flex-col
+                sm:flex-row
+                sm:items-center
+                sm:justify-between
+                gap-1
               "
             >
 
-              <ShieldCheck
+              <h3
                 className="
-                  w-5
-                  h-5
-                  text-blue-600
+                  text-sm
+                  sm:text-base
+                  font-bold
+                  text-slate-800
+                  flex
+                  items-center
+                  gap-2
                 "
-              />
+              >
 
-              <span>
-                병원 정보보호 핵심 체크리스트
+                <Target
+                  className="
+                    w-5
+                    h-5
+                    text-blue-600
+                  "
+                />
+
+                <span>
+                  이번 게임에 출제된 보안 취약점
+                </span>
+
+              </h3>
+
+
+              <span
+                className="
+                  text-[11px]
+                  sm:text-xs
+                  text-slate-400
+                  font-semibold
+                "
+              >
+                위치와 취약점 종류를 모두 맞혀야 완료됩니다.
               </span>
 
-            </h3>
+            </div>
 
 
             <div
               className="
                 space-y-2.5
-                max-h-[36vh]
-                overflow-y-auto
-                pr-1
               "
             >
 
               {allAnswers.map(
-                item => {
+                (
+                  item,
+                  index
+                ) => {
 
                   const wasFound =
                     foundAnswers.some(
-                      fa =>
-                        fa.id ===
-                        item.id
+                      found =>
+                        isSameAnswer(
+                          found,
+                          item
+                        )
                     );
 
 
@@ -645,7 +862,8 @@ React.FC<ResultScreenProps> = ({
 
                     <div
                       key={
-                        item.id
+                        item.vulnerabilityId ||
+                        `${item.title}-${index}`
                       }
                       className={`
                         p-3.5
@@ -671,55 +889,117 @@ React.FC<ResultScreenProps> = ({
                       <div
                         className="
                           flex
-                          items-center
+                          items-start
                           justify-between
                           gap-3
-                          mb-1
                         "
                       >
 
                         <div
                           className="
                             flex
-                            items-center
-                            gap-2
-                            font-bold
-                            text-slate-900
+                            items-start
+                            gap-3
                             min-w-0
+                            flex-1
                           "
                         >
 
-                          {wasFound ? (
+                          {/* Number */}
 
-                            <CheckCircle2
-                              className="
-                                w-4
-                                h-4
-                                text-emerald-600
-                                shrink-0
-                              "
-                            />
+                          <div
+                            className={`
+                              w-7
+                              h-7
+                              rounded-full
+                              flex
+                              items-center
+                              justify-center
+                              shrink-0
+                              text-xs
+                              font-black
+                              ${
+                                wasFound
+                                  ? `
+                                    bg-emerald-100
+                                    text-emerald-700
+                                  `
+                                  : `
+                                    bg-amber-100
+                                    text-amber-700
+                                  `
+                              }
+                            `}
+                          >
+                            {index + 1}
+                          </div>
 
-                          ) : (
 
-                            <XCircle
-                              className="
-                                w-4
-                                h-4
-                                text-amber-600
-                                shrink-0
-                              "
-                            />
-                          )}
-
-
-                          <span
+                          <div
                             className="
-                              truncate
+                              min-w-0
+                              flex-1
                             "
                           >
-                            {item.title}
-                          </span>
+
+                            <div
+                              className="
+                                flex
+                                items-center
+                                gap-2
+                                font-bold
+                                text-slate-900
+                              "
+                            >
+
+                              {
+                                wasFound
+                                  ? (
+                                      <CheckCircle2
+                                        className="
+                                          w-4
+                                          h-4
+                                          text-emerald-600
+                                          shrink-0
+                                        "
+                                      />
+                                    )
+                                  : (
+                                      <XCircle
+                                        className="
+                                          w-4
+                                          h-4
+                                          text-amber-600
+                                          shrink-0
+                                        "
+                                      />
+                                    )
+                              }
+
+
+                              <span>
+                                {item.title}
+                              </span>
+
+                            </div>
+
+
+                            <p
+                              className="
+                                text-xs
+                                sm:text-sm
+                                text-slate-600
+                                leading-relaxed
+                                mt-1.5
+                              "
+                            >
+                              {
+                                item.explanation ||
+                                '정보보호 수칙에 따라 안전하게 관리해야 하는 항목입니다.'
+                              }
+                            </p>
+
+                          </div>
 
                         </div>
 
@@ -728,8 +1008,8 @@ React.FC<ResultScreenProps> = ({
                           className={`
                             text-[11px]
                             font-semibold
-                            px-2
-                            py-0.5
+                            px-2.5
+                            py-1
                             rounded-full
                             shrink-0
                             border
@@ -748,29 +1028,19 @@ React.FC<ResultScreenProps> = ({
                             }
                           `}
                         >
+
                           {
                             wasFound
-                              ? '발견 완료'
-                              : '놓친 위험'
+                              ? '정답 완료'
+                              : '미완료'
                           }
+
                         </span>
 
                       </div>
 
-
-                      <p
-                        className="
-                          text-xs
-                          sm:text-sm
-                          text-slate-600
-                          pl-6
-                          leading-relaxed
-                        "
-                      >
-                        {item.explanation}
-                      </p>
-
                     </div>
+
                   );
                 }
               )}
@@ -778,6 +1048,86 @@ React.FC<ResultScreenProps> = ({
             </div>
 
           </div>
+
+
+          {/* ===================================================
+              실패 시 놓친 문제 요약
+          =================================================== */}
+
+          {!isSuccess &&
+            unfoundAnswers.length >
+              0 && (
+
+            <div
+              className="
+                p-4
+                rounded-2xl
+                bg-amber-50
+                border
+                border-amber-200
+              "
+            >
+
+              <div
+                className="
+                  flex
+                  items-start
+                  gap-2.5
+                "
+              >
+
+                <AlertTriangle
+                  className="
+                    w-5
+                    h-5
+                    text-amber-600
+                    shrink-0
+                    mt-0.5
+                  "
+                />
+
+
+                <div>
+
+                  <div
+                    className="
+                      text-sm
+                      font-bold
+                      text-amber-900
+                    "
+                  >
+                    놓친 보안 취약점
+                  </div>
+
+
+                  <p
+                    className="
+                      text-xs
+                      sm:text-sm
+                      text-amber-800
+                      leading-relaxed
+                      mt-1
+                    "
+                  >
+                    {
+                      unfoundAnswers
+                        .map(
+                          answer =>
+                            answer.title
+                        )
+                        .join(
+                          ', '
+                        )
+                    }
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          )}
 
 
           {/* ===================================================
@@ -860,8 +1210,9 @@ React.FC<ResultScreenProps> = ({
                 "
               />
 
+
               <span>
-                다시 도전하기
+                새로운 3문제로 다시 도전하기
               </span>
 
             </button>

@@ -8,7 +8,7 @@ import React, {
 import {
   getConfig,
   getQuestions,
-  resolveQuestionImages,
+  resolveQuestionImage,
   type Question,
   type SecurityAnswer,
   type GameConfig,
@@ -17,6 +17,13 @@ import {
 import {
   DEFAULT_CONFIG,
 } from '../constants/config';
+
+import {
+  SECURITY_VULNERABILITIES,
+  createVulnerabilityChoices,
+  pickRandomItems,
+  type SecurityVulnerability,
+} from '../constants/securityVulnerabilities';
 
 import {
   StartScreen,
@@ -44,114 +51,313 @@ import {
 
 import {
   AlertCircle,
+  CheckCircle2,
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  XCircle,
 } from 'lucide-react';
 
 
 /* =========================================================
-   Demo Question
+   Constants
 ========================================================= */
 
-const DEMO_QUESTION: Question = {
-  id: 'demo-nurse-station',
+const GAME_TIME_LIMIT =
+  60;
 
-  title:
-    '간호사 스테이션 보안 취약점 찾기',
+const GAME_LIVES =
+  3;
 
-  normalImageUrl:
-    '/images/security-normal.png',
+const QUESTIONS_PER_GAME =
+  3;
 
-  riskImageUrl:
-    '/images/security-risk.png',
+const CORRECT_FEEDBACK_TIME =
+  1200;
 
-  answers: [
-    {
-      id: 1,
+const WRONG_CHOICE_FEEDBACK_TIME =
+  500;
 
-      x: 35.0,
 
-      y: 42.0,
+/* =========================================================
+   Demo Questions
+========================================================= */
 
-      radius: 8,
+const DEMO_QUESTIONS:
+Question[] = [
+
+  {
+    id:
+      'demo-emr',
+
+    title:
+      '간호사 스테이션 - EMR 화면 노출',
+
+    imageUrl:
+      '/images/security-risk.png',
+
+    imageId:
+      undefined,
+
+    normalImageUrl:
+      '',
+
+    riskImageUrl:
+      '/images/security-risk.png',
+
+    answers: [
+      {
+        id:
+          1,
+
+        x:
+          35,
+
+        y:
+          42,
+
+        radius:
+          8,
+
+        vulnerabilityId:
+          'EMR_SCREEN_EXPOSED',
+
+        title:
+          'EMR 화면 노출',
+
+        hint:
+          '업무용 PC 화면 주변을 확인해보세요.',
+
+        explanation:
+          'EMR 또는 의료정보시스템 화면이 주변 사람에게 노출되어 환자정보를 확인할 수 있는 상태입니다.',
+      },
+    ],
+
+    answer: {
+      id:
+        1,
+
+      x:
+        35,
+
+      y:
+        42,
+
+      radius:
+        8,
+
+      vulnerabilityId:
+        'EMR_SCREEN_EXPOSED',
 
       title:
-        '환자정보 화면 노출',
+        'EMR 화면 노출',
 
       hint:
-        '가운데 업무용 PC 화면을 확인해보세요.',
+        '업무용 PC 화면 주변을 확인해보세요.',
 
       explanation:
-        '업무용 PC 모니터에 환자 개인정보가 노출되어 있습니다. 자리를 비울 때는 반드시 화면을 잠그거나 로그아웃해야 합니다.',
+        'EMR 또는 의료정보시스템 화면이 주변 사람에게 노출되어 환자정보를 확인할 수 있는 상태입니다.',
     },
 
-    {
-      id: 2,
+    /*
+     * 데모에서도 필요하면
+     * 애매한 선택지를 제외할 수 있습니다.
+     */
+    excludedChoiceIds: [
+      'PATIENT_NAME_EXPOSED',
+      'PUBLIC_SPACE_PATIENT_INFO',
+    ],
 
-      x: 9.0,
+    timeLimit:
+      60,
 
-      y: 78.0,
+    lives:
+      3,
 
-      radius: 8,
+    hintCount:
+      1,
+
+    active:
+      true,
+  },
+
+
+  {
+    id:
+      'demo-password',
+
+    title:
+      '간호사 스테이션 - 계정정보 메모 방치',
+
+    imageUrl:
+      '/images/security-risk.png',
+
+    normalImageUrl:
+      '',
+
+    riskImageUrl:
+      '/images/security-risk.png',
+
+    answers: [
+      {
+        id:
+          1,
+
+        x:
+          84,
+
+        y:
+          65,
+
+        radius:
+          8,
+
+        vulnerabilityId:
+          'ACCOUNT_INFO_MEMO',
+
+        title:
+          '계정정보 메모 방치',
+
+        hint:
+          '모니터 또는 책상 주변을 확인해보세요.',
+
+        explanation:
+          '아이디나 비밀번호 등 계정정보를 적은 메모지가 모니터나 책상 등에 방치되어 있습니다.',
+      },
+    ],
+
+    answer: {
+      id:
+        1,
+
+      x:
+        84,
+
+      y:
+        65,
+
+      radius:
+        8,
+
+      vulnerabilityId:
+        'ACCOUNT_INFO_MEMO',
 
       title:
-        '진료정보 문서 폐기',
+        '계정정보 메모 방치',
 
       hint:
-        '화면 왼쪽 아래를 확인해보세요.',
+        '모니터 또는 책상 주변을 확인해보세요.',
 
       explanation:
-        '환자정보가 포함된 문서가 일반 휴지통에 버려져 있습니다. 개인정보 문서는 지정된 절차에 따라 안전하게 파기해야 합니다.',
+        '아이디나 비밀번호 등 계정정보를 적은 메모지가 모니터나 책상 등에 방치되어 있습니다.',
     },
 
-    {
-      id: 3,
+    excludedChoiceIds: [
+      'ACCOUNT_PASSWORD_EXPOSED',
+    ],
 
-      x: 52.0,
+    timeLimit:
+      60,
 
-      y: 66.0,
+    lives:
+      3,
 
-      radius: 8,
+    hintCount:
+      1,
+
+    active:
+      true,
+  },
+
+
+  {
+    id:
+      'demo-document',
+
+    title:
+      '간호사 스테이션 - 개인정보 문서 일반폐기',
+
+    imageUrl:
+      '/images/security-risk.png',
+
+    normalImageUrl:
+      '',
+
+    riskImageUrl:
+      '/images/security-risk.png',
+
+    answers: [
+      {
+        id:
+          1,
+
+        x:
+          10,
+
+        y:
+          78,
+
+        radius:
+          8,
+
+        vulnerabilityId:
+          'PERSONAL_DOCUMENT_GENERAL_WASTE',
+
+        title:
+          '개인정보 문서 일반폐기',
+
+        hint:
+          '사진 아래쪽을 확인해보세요.',
+
+        explanation:
+          '개인정보가 포함된 문서가 보안 파기 절차 없이 일반 쓰레기로 폐기되고 있습니다.',
+      },
+    ],
+
+    answer: {
+      id:
+        1,
+
+      x:
+        10,
+
+      y:
+        78,
+
+      radius:
+        8,
+
+      vulnerabilityId:
+        'PERSONAL_DOCUMENT_GENERAL_WASTE',
 
       title:
-        '직원증 노출',
+        '개인정보 문서 일반폐기',
 
       hint:
-        '의자 주변을 확인해보세요.',
+        '사진 아래쪽을 확인해보세요.',
 
       explanation:
-        '외부에서 식별 가능한 직원증이 방치되어 있습니다. 직원증과 출입증은 분실 또는 무단사용되지 않도록 관리해야 합니다.',
+        '개인정보가 포함된 문서가 보안 파기 절차 없이 일반 쓰레기로 폐기되고 있습니다.',
     },
 
-    {
-      id: 4,
+    excludedChoiceIds: [
+      'PERSONAL_MEMO_DISPOSAL',
+    ],
 
-      x: 86.0,
+    timeLimit:
+      60,
 
-      y: 66.0,
+    lives:
+      3,
 
-      radius: 8,
+    hintCount:
+      1,
 
-      title:
-        '비밀번호 메모 노출',
+    active:
+      true,
+  },
 
-      hint:
-        '오른쪽 컴퓨터 주변을 확인해보세요.',
-
-      explanation:
-        '아이디와 비밀번호가 메모지에 적혀 외부에 노출되어 있습니다. 계정정보는 메모지에 적어 모니터나 책상에 붙여두면 안 됩니다.',
-    },
-  ],
-
-  timeLimit: 60,
-
-  lives: 3,
-
-  hintCount: 1,
-
-  active: true,
-};
+];
 
 
 /* =========================================================
@@ -168,11 +374,227 @@ type PlayState =
 
 
 /* =========================================================
+   Question의 실제 정답 인정 위치 전체 가져오기
+
+   신규 구조:
+   - 한 문제에 같은 취약점의 정답 위치를 여러 개 등록 가능
+   - answers[] 전체를 유지
+
+   Legacy:
+   - answers[]가 없으면 answer 1개를 배열로 변환
+   - vulnerabilityId가 없으면 title ↔ catalog label로 자동 연결
+========================================================= */
+
+const getQuestionAnswers =
+  (
+    question:
+      Question
+  ):
+    SecurityAnswer[] => {
+
+    const sourceAnswers =
+      Array.isArray(
+        question.answers
+      ) &&
+      question.answers.length >
+        0
+        ? question.answers
+        : question.answer
+          ? [
+              question.answer,
+            ]
+          : [];
+
+
+    return sourceAnswers
+      .map(
+        (
+          sourceAnswer,
+          index
+        ):
+          SecurityAnswer |
+          null => {
+
+          let vulnerability =
+            sourceAnswer
+              .vulnerabilityId
+              ? SECURITY_VULNERABILITIES
+                  .find(
+                    item =>
+                      item.id ===
+                      sourceAnswer
+                        .vulnerabilityId
+                  )
+              : undefined;
+
+
+          /*
+           * 기존 데이터 호환:
+           * vulnerabilityId가 없으면
+           * title과 catalog label 비교
+           */
+          if (
+            !vulnerability &&
+            sourceAnswer.title
+          ) {
+
+            vulnerability =
+              SECURITY_VULNERABILITIES
+                .find(
+                  item =>
+                    item.label ===
+                    sourceAnswer.title
+                );
+          }
+
+
+          if (
+            !vulnerability
+          ) {
+
+            return null;
+          }
+
+
+          return {
+
+            ...sourceAnswer,
+
+            id:
+              index +
+              1,
+
+            vulnerabilityId:
+              vulnerability.id,
+
+            title:
+              vulnerability.label,
+
+            hint:
+              sourceAnswer.hint ||
+              '',
+
+            explanation:
+              sourceAnswer
+                .explanation ||
+              vulnerability
+                .description ||
+              '',
+          };
+        }
+      )
+      .filter(
+        (
+          answer
+        ):
+          answer is SecurityAnswer =>
+            Boolean(
+              answer
+            )
+      );
+  };
+
+
+/* =========================================================
+   대표 정답 1개 가져오기
+
+   - 4지선다 정답 유형
+   - 힌트
+   - 결과 화면
+
+   등에 사용할 대표값으로 첫 번째 위치 사용
+========================================================= */
+
+const getQuestionAnswer =
+  (
+    question:
+      Question
+  ):
+    SecurityAnswer |
+    null => {
+
+    return (
+      getQuestionAnswers(
+        question
+      )[0] ||
+      null
+    );
+  };
+
+
+/* =========================================================
+   플레이 가능한 Question 변환
+========================================================= */
+
+const normalizePlayableQuestion =
+  (
+    question:
+      Question
+  ):
+    Question |
+    null => {
+
+    const normalizedAnswers =
+      getQuestionAnswers(
+        question
+      );
+
+
+    const answer =
+      normalizedAnswers[0] ||
+      null;
+
+
+    if (
+      !answer ||
+      !answer.vulnerabilityId ||
+      normalizedAnswers.length ===
+        0
+    ) {
+
+      return null;
+    }
+
+
+    return {
+
+      ...question,
+
+      /*
+       * 기존 코드 호환을 위한 대표 정답
+       */
+      answer,
+
+      /*
+       * 실제 게임 클릭 판정에 사용하는
+       * 모든 정답 인정 위치
+       */
+      answers:
+        normalizedAnswers,
+
+      /*
+       * API에서 없으면 빈 배열
+       */
+      excludedChoiceIds:
+        Array.isArray(
+          question.excludedChoiceIds
+        )
+          ? question.excludedChoiceIds
+          : [],
+    };
+  };
+
+
+/* =========================================================
    GamePage
 ========================================================= */
 
 export const GamePage:
 React.FC = () => {
+
+  /* =========================================================
+     Base Data
+  ========================================================= */
 
   const [
     playState,
@@ -192,6 +614,9 @@ React.FC = () => {
     );
 
 
+  /*
+   * 관리자에서 활성화된 전체 문제
+   */
   const [
     activeQuestions,
     setActiveQuestions,
@@ -201,123 +626,78 @@ React.FC = () => {
     );
 
 
-  const [
-    currentQuestion,
-    setCurrentQuestion,
-  ] =
-    useState<Question | null>(
-      null
-    );
-
-
-  /* =========================================================
-     표시 이미지
-  ========================================================= */
-
-  const [
-    normalImageSrc,
-    setNormalImageSrc,
-  ] =
-    useState<string>(
-      ''
-    );
-
-
-  const [
-    riskImageSrc,
-    setRiskImageSrc,
-  ] =
-    useState<string>(
-      ''
-    );
-
-
-  /* =========================================================
-     Game State
-  ========================================================= */
-
-  const [
-    timeLeft,
-    setTimeLeft,
-  ] =
-    useState<number>(
-      60
-    );
-
-
   /*
-   * 내부 데이터 구조는 lives 유지
-   * 화면에서는 "기회"로 표시
+   * 이번 게임에서 랜덤 선택된 3문제
    */
   const [
-    lives,
-    setLives,
+    gameQuestions,
+    setGameQuestions,
   ] =
-    useState<number>(
-      3
-    );
-
-
-  const [
-    hintCount,
-    setHintCount,
-  ] =
-    useState<number>(
-      1
-    );
-
-
-  const [
-    foundAnswerIds,
-    setFoundAnswerIds,
-  ] =
-    useState<number[]>(
+    useState<Question[]>(
       []
     );
 
 
   const [
-    isHintOpen,
-    setIsHintOpen,
+    currentQuestionIndex,
+    setCurrentQuestionIndex,
   ] =
-    useState<boolean>(
-      false
+    useState<number>(
+      0
     );
 
 
-  const [
-    currentHintText,
-    setCurrentHintText,
-  ] =
-    useState<string>(
-      ''
-    );
+  const currentQuestion =
+    gameQuestions[
+      currentQuestionIndex
+    ] ||
+    null;
 
 
-  const [
-    activeExplanation,
-    setActiveExplanation,
-  ] =
-    useState<{
-      title: string;
-      text: string;
-    } | null>(
-      null
-    );
+  const currentAnswers =
+    currentQuestion
+      ? getQuestionAnswers(
+          currentQuestion
+        )
+      : [];
 
 
-  const [
-    isMuted,
-    setIsMuted,
-  ] =
-    useState<boolean>(
-      !soundManager.isEnabled()
-    );
+  /*
+   * 4지선다 / 힌트 / 결과 화면에 사용할 대표 정답
+   */
+  const currentAnswer =
+    currentAnswers[0] ||
+    null;
 
 
   /* =========================================================
-     Image State
+     Image Sources
   ========================================================= */
+
+  const [
+    imageSources,
+    setImageSources,
+  ] =
+    useState<
+      Record<
+        string,
+        string
+      >
+    >(
+      {}
+    );
+
+
+  const currentImageSrc =
+    currentQuestion
+      ? (
+          imageSources[
+            currentQuestion.id
+          ] ||
+          ''
+        )
+      : '';
+
 
   const [
     isLoadingImages,
@@ -338,7 +718,135 @@ React.FC = () => {
 
 
   /* =========================================================
-     Result State
+     Global Game State
+  ========================================================= */
+
+  const [
+    timeLeft,
+    setTimeLeft,
+  ] =
+    useState<number>(
+      GAME_TIME_LIMIT
+    );
+
+
+  const [
+    lives,
+    setLives,
+  ] =
+    useState<number>(
+      GAME_LIVES
+    );
+
+
+  const [
+    hintCount,
+    setHintCount,
+  ] =
+    useState<number>(
+      1
+    );
+
+
+  const [
+    completedQuestionIds,
+    setCompletedQuestionIds,
+  ] =
+    useState<string[]>(
+      []
+    );
+
+
+  const [
+    locationFound,
+    setLocationFound,
+  ] =
+    useState<boolean>(
+      false
+    );
+
+
+  /* =========================================================
+     4지선다
+  ========================================================= */
+
+  const [
+    choiceOptions,
+    setChoiceOptions,
+  ] =
+    useState<
+      SecurityVulnerability[]
+    >(
+      []
+    );
+
+
+  const [
+    wrongChoiceId,
+    setWrongChoiceId,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+
+  /* =========================================================
+     Correct Feedback
+  ========================================================= */
+
+  const [
+    activeExplanation,
+    setActiveExplanation,
+  ] =
+    useState<{
+      title:
+        string;
+
+      text:
+        string;
+    } | null>(
+      null
+    );
+
+
+  /* =========================================================
+     Hint
+  ========================================================= */
+
+  const [
+    isHintOpen,
+    setIsHintOpen,
+  ] =
+    useState<boolean>(
+      false
+    );
+
+
+  const [
+    currentHintText,
+    setCurrentHintText,
+  ] =
+    useState<string>(
+      ''
+    );
+
+
+  /* =========================================================
+     Sound
+  ========================================================= */
+
+  const [
+    isMuted,
+    setIsMuted,
+  ] =
+    useState<boolean>(
+      !soundManager
+        .isEnabled()
+    );
+
+
+  /* =========================================================
+     Result
   ========================================================= */
 
   const [
@@ -387,16 +895,31 @@ React.FC = () => {
 
   const timerRef =
     useRef<
-      ReturnType<typeof setInterval> |
+      ReturnType<
+        typeof setInterval
+      > |
       null
     >(
       null
     );
 
 
-  const explanationTimeoutRef =
+  const transitionTimeoutRef =
     useRef<
-      ReturnType<typeof setTimeout> |
+      ReturnType<
+        typeof setTimeout
+      > |
+      null
+    >(
+      null
+    );
+
+
+  const wrongChoiceTimeoutRef =
+    useRef<
+      ReturnType<
+        typeof setTimeout
+      > |
       null
     >(
       null
@@ -409,88 +932,308 @@ React.FC = () => {
     );
 
 
+  const timeLeftRef =
+    useRef<number>(
+      GAME_TIME_LIMIT
+    );
+
+
+  /* =========================================================
+     timeLeft Ref 동기화
+  ========================================================= */
+
+  useEffect(
+    () => {
+
+      timeLeftRef.current =
+        timeLeft;
+
+    },
+    [
+      timeLeft,
+    ]
+  );
+
+
   /* =========================================================
      Image Preload
   ========================================================= */
 
-  const preloadImages =
+  const preloadSingleImage =
+    useCallback(
+      (
+        src:
+          string
+      ) =>
+        new Promise<void>(
+          (
+            resolve,
+            reject
+          ) => {
+
+            const img =
+              new Image();
+
+
+            img.onload =
+              () =>
+                resolve();
+
+
+            img.onerror =
+              () =>
+                reject(
+                  new Error(
+                    '이미지 로드 실패'
+                  )
+                );
+
+
+            img.src =
+              src;
+          }
+        ),
+      []
+    );
+
+
+  /* =========================================================
+     랜덤 3문제 준비
+  ========================================================= */
+
+  const prepareGameSet =
     useCallback(
       async (
-        normalSrc: string,
-        riskSrc: string
+        sourceQuestions:
+          Question[],
+
+        gameConfig:
+          GameConfig
       ) => {
+
+        const playable =
+          sourceQuestions
+            .map(
+              normalizePlayableQuestion
+            )
+            .filter(
+              (
+                question
+              ):
+                question is Question =>
+                  Boolean(
+                    question
+                  )
+            );
+
+
+        /*
+         * 최소 3개 필요
+         */
+        if (
+          playable.length <
+          QUESTIONS_PER_GAME
+        ) {
+
+          setGameQuestions(
+            []
+          );
+
+
+          setImageSources(
+            {}
+          );
+
+
+          setPlayState(
+            'EMPTY'
+          );
+
+
+          return false;
+        }
+
+
+        /*
+         * 활성 문제 중 랜덤 3개
+         */
+        const selected =
+          pickRandomItems(
+            playable,
+            gameConfig
+              .questionsPerGame ||
+              QUESTIONS_PER_GAME
+          )
+            .slice(
+              0,
+              QUESTIONS_PER_GAME
+            );
+
 
         setIsLoadingImages(
           true
         );
+
 
         setImageLoadError(
           false
         );
 
 
-        if (
-          !normalSrc ||
-          !riskSrc
-        ) {
+        try {
 
-          setImageLoadError(
-            true
-          );
+          /*
+           * 출제할 이미지 3장 미리 조회
+           */
+          const results =
+            await Promise.all(
+              selected.map(
+                async question => {
 
-          setIsLoadingImages(
-            false
-          );
-
-          return false;
-        }
-
-
-        const preload =
-          (
-            src: string
-          ) =>
-            new Promise<void>(
-              (
-                resolve,
-                reject
-              ) => {
-
-                const img =
-                  new Image();
-
-
-                img.onload =
-                  () =>
-                    resolve();
-
-
-                img.onerror =
-                  () =>
-                    reject(
-                      new Error(
-                        '이미지 로드 실패'
-                      )
+                  const result =
+                    await resolveQuestionImage(
+                      question
                     );
 
 
-                img.src =
-                  src;
-              }
+                  if (
+                    !result.success ||
+                    !result.data
+                  ) {
+
+                    throw new Error(
+                      result.error ||
+                      '문제 이미지를 불러오지 못했습니다.'
+                    );
+                  }
+
+
+                  const src =
+                    result.data
+                      .imageSrc;
+
+
+                  await preloadSingleImage(
+                    src
+                  );
+
+
+                  return {
+
+                    id:
+                      question.id,
+
+                    src,
+                  };
+                }
+              )
             );
 
 
-        try {
+          const sourceMap:
+            Record<
+              string,
+              string
+            > = {};
 
-          await Promise.all([
-            preload(
-              normalSrc
-            ),
 
-            preload(
-              riskSrc
-            ),
-          ]);
+          results.forEach(
+            result => {
+
+              sourceMap[
+                result.id
+              ] =
+                result.src;
+            }
+          );
+
+
+          setImageSources(
+            sourceMap
+          );
+
+
+          setGameQuestions(
+            selected
+          );
+
+
+          setCurrentQuestionIndex(
+            0
+          );
+
+
+          /*
+           * 게임 전체 State 초기화
+           */
+          setTimeLeft(
+            GAME_TIME_LIMIT
+          );
+
+
+          timeLeftRef.current =
+            GAME_TIME_LIMIT;
+
+
+          setLives(
+            GAME_LIVES
+          );
+
+
+          setHintCount(
+            gameConfig
+              .defaultHintCount ??
+              1
+          );
+
+
+          setCompletedQuestionIds(
+            []
+          );
+
+
+          setLocationFound(
+            false
+          );
+
+
+          setChoiceOptions(
+            []
+          );
+
+
+          setWrongChoiceId(
+            null
+          );
+
+
+          setIsHintOpen(
+            false
+          );
+
+
+          setCurrentHintText(
+            ''
+          );
+
+
+          setActiveExplanation(
+            null
+          );
+
+
+          setIsSuccess(
+            false
+          );
+
+
+          setFailReason(
+            null
+          );
+
+
+          isFinishedRef.current =
+            false;
 
 
           setIsLoadingImages(
@@ -503,197 +1246,7 @@ React.FC = () => {
         } catch (error) {
 
           console.error(
-            '이미지 preload 오류:',
-            error
-          );
-
-
-          setImageLoadError(
-            true
-          );
-
-
-          setIsLoadingImages(
-            false
-          );
-
-
-          return false;
-        }
-      },
-      []
-    );
-
-
-  /* =========================================================
-     Question Setup
-  ========================================================= */
-
-  const setupQuestion =
-    useCallback(
-      async (
-        q: Question,
-        cfg: GameConfig
-      ) => {
-
-        setCurrentQuestion(
-          q
-        );
-
-
-        const initialTime =
-          q.timeLimit ||
-          cfg.defaultTimeLimit ||
-          60;
-
-
-        const initialLives =
-          q.lives ||
-          cfg.defaultLives ||
-          3;
-
-
-        const initialHints =
-          q.hintCount !==
-          undefined
-            ? q.hintCount
-            : (
-                cfg.defaultHintCount ??
-                1
-              );
-
-
-        setTimeLeft(
-          initialTime
-        );
-
-
-        setLives(
-          initialLives
-        );
-
-
-        setHintCount(
-          initialHints
-        );
-
-
-        setFoundAnswerIds(
-          []
-        );
-
-
-        setIsSuccess(
-          false
-        );
-
-
-        setFailReason(
-          null
-        );
-
-
-        setIsHintOpen(
-          false
-        );
-
-
-        setCurrentHintText(
-          ''
-        );
-
-
-        setActiveExplanation(
-          null
-        );
-
-
-        isFinishedRef.current =
-          false;
-
-
-        setNormalImageSrc(
-          ''
-        );
-
-
-        setRiskImageSrc(
-          ''
-        );
-
-
-        setIsLoadingImages(
-          true
-        );
-
-
-        setImageLoadError(
-          false
-        );
-
-
-        try {
-
-          const imageResult =
-            await resolveQuestionImages(
-              q
-            );
-
-
-          if (
-            !imageResult.success ||
-            !imageResult.data
-          ) {
-
-            console.error(
-              '문제 이미지 조회 실패:',
-              imageResult.error
-            );
-
-
-            setImageLoadError(
-              true
-            );
-
-
-            setIsLoadingImages(
-              false
-            );
-
-
-            return false;
-          }
-
-
-          const {
-            normalImageSrc:
-              resolvedNormalSrc,
-
-            riskImageSrc:
-              resolvedRiskSrc,
-          } =
-            imageResult.data;
-
-
-          setNormalImageSrc(
-            resolvedNormalSrc
-          );
-
-
-          setRiskImageSrc(
-            resolvedRiskSrc
-          );
-
-
-          return await preloadImages(
-            resolvedNormalSrc,
-            resolvedRiskSrc
-          );
-
-        } catch (error) {
-
-          console.error(
-            '문제 이미지 처리 오류:',
+            '게임 이미지 준비 오류:',
             error
           );
 
@@ -712,13 +1265,13 @@ React.FC = () => {
         }
       },
       [
-        preloadImages,
+        preloadSingleImage,
       ]
     );
 
 
   /* =========================================================
-     Config + Questions
+     Load Config + Questions
   ========================================================= */
 
   const loadGameData =
@@ -738,8 +1291,8 @@ React.FC = () => {
         try {
 
           const [
-            configRes,
-            questionsRes,
+            configResult,
+            questionResult,
           ] =
             await Promise.all([
               getConfig(),
@@ -749,11 +1302,19 @@ React.FC = () => {
 
           const loadedConfig =
             (
-              configRes.success &&
-              configRes.data
+              configResult
+                .success &&
+
+              configResult
+                .data
             )
-              ? configRes.data
-              : DEFAULT_CONFIG;
+              ? configResult.data
+              : {
+                  ...DEFAULT_CONFIG,
+
+                  questionsPerGame:
+                    QUESTIONS_PER_GAME,
+                };
 
 
           setConfig(
@@ -762,11 +1323,11 @@ React.FC = () => {
 
 
           if (
-            !questionsRes.success
+            !questionResult.success
           ) {
 
             setErrorMessage(
-              questionsRes.error ||
+              questionResult.error ||
               '게임 데이터를 불러오지 못했습니다.'
             );
 
@@ -780,27 +1341,47 @@ React.FC = () => {
           }
 
 
-          const all =
-            questionsRes.data ||
+          const allQuestions =
+            questionResult.data ||
             [];
 
 
-          const actives =
-            all.filter(
-              q =>
-                q.active
-            );
+          const active =
+            allQuestions
+              .filter(
+                question =>
+                  question.active
+              );
+
+
+          /*
+           * answer + vulnerabilityId가 있는 문제만
+           */
+          const playable =
+            active
+              .map(
+                normalizePlayableQuestion
+              )
+              .filter(
+                (
+                  question
+                ):
+                  question is Question =>
+                    Boolean(
+                      question
+                    )
+              );
+
+
+          setActiveQuestions(
+            playable
+          );
 
 
           if (
-            actives.length ===
-            0
+            playable.length <
+            QUESTIONS_PER_GAME
           ) {
-
-            setActiveQuestions(
-              []
-            );
-
 
             setPlayState(
               'EMPTY'
@@ -811,29 +1392,21 @@ React.FC = () => {
           }
 
 
-          setActiveQuestions(
-            actives
-          );
+          const prepared =
+            await prepareGameSet(
+              playable,
+              loadedConfig
+            );
 
 
-          const chosen =
-            actives[
-              Math.floor(
-                Math.random() *
-                actives.length
-              )
-            ];
+          if (
+            prepared
+          ) {
 
-
-          await setupQuestion(
-            chosen,
-            loadedConfig
-          );
-
-
-          setPlayState(
-            'START'
-          );
+            setPlayState(
+              'START'
+            );
+          }
 
         } catch (error) {
 
@@ -854,7 +1427,7 @@ React.FC = () => {
         }
       },
       [
-        setupQuestion,
+        prepareGameSet,
       ]
     );
 
@@ -876,7 +1449,97 @@ React.FC = () => {
 
 
   /* =========================================================
-     Timer
+     Finish Game
+  ========================================================= */
+
+  const finishGame =
+    useCallback(
+      (
+        success:
+          boolean,
+
+        reason:
+          'TIME_OUT' |
+          'NO_LIVES' |
+          null
+      ) => {
+
+        if (
+          isFinishedRef.current
+        ) {
+
+          return;
+        }
+
+
+        isFinishedRef.current =
+          true;
+
+
+        if (
+          timerRef.current
+        ) {
+
+          clearInterval(
+            timerRef.current
+          );
+
+
+          timerRef.current =
+            null;
+        }
+
+
+        const spent =
+          GAME_TIME_LIMIT -
+          timeLeftRef.current;
+
+
+        setTimeSpent(
+          Math.max(
+            0,
+            Math.min(
+              GAME_TIME_LIMIT,
+              spent
+            )
+          )
+        );
+
+
+        setIsSuccess(
+          success
+        );
+
+
+        setFailReason(
+          reason
+        );
+
+
+        if (
+          success
+        ) {
+
+          soundManager
+            .playVictory();
+
+        } else {
+
+          soundManager
+            .playGameOver();
+        }
+
+
+        setPlayState(
+          'RESULT'
+        );
+      },
+      []
+    );
+
+
+  /* =========================================================
+     Global 60s Timer
   ========================================================= */
 
   useEffect(
@@ -910,11 +1573,16 @@ React.FC = () => {
           () => {
 
             setTimeLeft(
-              prev => {
+              previous => {
 
                 if (
-                  prev <= 1
+                  previous <=
+                  1
                 ) {
+
+                  timeLeftRef.current =
+                    0;
+
 
                   if (
                     timerRef.current
@@ -938,20 +1606,8 @@ React.FC = () => {
                       true;
 
 
-                    soundManager
-                      .playGameOver();
-
-
-                    const totalLimit =
-                      currentQuestion
-                        ?.timeLimit ||
-                      config
-                        .defaultTimeLimit ||
-                      60;
-
-
                     setTimeSpent(
-                      totalLimit
+                      GAME_TIME_LIMIT
                     );
 
 
@@ -965,6 +1621,10 @@ React.FC = () => {
                     );
 
 
+                    soundManager
+                      .playGameOver();
+
+
                     setPlayState(
                       'RESULT'
                     );
@@ -975,9 +1635,16 @@ React.FC = () => {
                 }
 
 
-                return (
-                  prev - 1
-                );
+                const next =
+                  previous -
+                  1;
+
+
+                timeLeftRef.current =
+                  next;
+
+
+                return next;
               }
             );
 
@@ -1005,8 +1672,6 @@ React.FC = () => {
     },
     [
       playState,
-      currentQuestion,
-      config,
     ]
   );
 
@@ -1021,21 +1686,31 @@ React.FC = () => {
       return () => {
 
         if (
-          explanationTimeoutRef.current
-        ) {
-
-          clearTimeout(
-            explanationTimeoutRef.current
-          );
-        }
-
-
-        if (
           timerRef.current
         ) {
 
           clearInterval(
             timerRef.current
+          );
+        }
+
+
+        if (
+          transitionTimeoutRef.current
+        ) {
+
+          clearTimeout(
+            transitionTimeoutRef.current
+          );
+        }
+
+
+        if (
+          wrongChoiceTimeoutRef.current
+        ) {
+
+          clearTimeout(
+            wrongChoiceTimeoutRef.current
           );
         }
       };
@@ -1046,10 +1721,74 @@ React.FC = () => {
 
 
   /* =========================================================
-     Correct Answer
+     기회 차감
   ========================================================= */
 
-  const handleCorrectAnswer =
+  const consumeLife =
+    useCallback(
+      () => {
+
+        if (
+          isFinishedRef.current
+        ) {
+
+          return;
+        }
+
+
+        soundManager
+          .playWrong();
+
+
+        setLives(
+          previous => {
+
+            const next =
+              previous -
+              1;
+
+
+            if (
+              next <=
+              0
+            ) {
+
+              window.setTimeout(
+                () => {
+
+                  finishGame(
+                    false,
+                    'NO_LIVES'
+                  );
+
+                },
+                250
+              );
+
+
+              return 0;
+            }
+
+
+            return next;
+          }
+        );
+      },
+      [
+        finishGame,
+      ]
+    );
+
+
+  /* =========================================================
+     1단계
+     사진에서 올바른 위치 클릭
+
+     ★ 핵심 수정:
+     currentQuestion.excludedChoiceIds 반영
+  ========================================================= */
+
+  const handleLocationFound =
     (
       answer:
         SecurityAnswer
@@ -1057,67 +1796,163 @@ React.FC = () => {
 
       if (
         isFinishedRef.current ||
-        !currentQuestion
+        locationFound ||
+        !currentQuestion ||
+        !answer
+          .vulnerabilityId
       ) {
 
         return;
       }
 
 
-      if (
-        foundAnswerIds.includes(
-          answer.id
-        )
-      ) {
-
-        return;
-      }
-
-
+      /*
+       * 위치만 맞은 상태
+       * 아직 문제 완료는 아님
+       */
       soundManager
-        .playCorrect();
+        .playClick();
 
 
-      const newFoundIds = [
-        ...foundAnswerIds,
-        answer.id,
-      ];
-
-
-      setFoundAnswerIds(
-        newFoundIds
+      setLocationFound(
+        true
       );
 
 
       /*
-       * 이전 정답 설명 타이머 제거
+       * =====================================================
+       * 4지선다 생성
+       *
+       * 1. 실제 정답 1개
+       * 2. 관리자 제외 목록 제거
+       * 3. 남은 후보 중 랜덤 오답 3개
+       * 4. 최종 순서 Shuffle
+       * =====================================================
+       */
+      const choices =
+        createVulnerabilityChoices(
+          answer.vulnerabilityId,
+          4,
+          currentQuestion
+            .excludedChoiceIds ||
+            []
+        );
+
+
+      /*
+       * 정상적으로는 QuestionEditor에서
+       * 오답 후보가 3개 미만이 되지 않도록 막지만,
+       * 과거 데이터 등 예외상황도 방어
        */
       if (
-        explanationTimeoutRef.current
+        choices.length <
+        4
       ) {
 
-        clearTimeout(
-          explanationTimeoutRef.current
+        console.error(
+          '4지선다 생성 실패:',
+          {
+            questionId:
+              currentQuestion.id,
+
+            correctId:
+              answer.vulnerabilityId,
+
+            excludedChoiceIds:
+              currentQuestion
+                .excludedChoiceIds ||
+              [],
+
+            choices,
+          }
         );
+
+
+        setErrorMessage(
+          '이 문제의 4지선다를 생성할 수 없습니다. 관리자에서 제외 항목 설정을 확인해주세요.'
+        );
+
+
+        return;
+      }
+
+
+      setChoiceOptions(
+        choices
+      );
+    };
+
+
+  /* =========================================================
+     사진 위치 오답
+  ========================================================= */
+
+  const handleWrongLocation =
+    () => {
+
+      if (
+        isFinishedRef.current ||
+        locationFound
+      ) {
+
+        return;
+      }
+
+
+      consumeLife();
+    };
+
+
+  /* =========================================================
+     다음 문제 이동
+  ========================================================= */
+
+  const moveToNextQuestion =
+    (
+      completedIds:
+        string[]
+    ) => {
+
+      const isLast =
+        currentQuestionIndex >=
+        gameQuestions.length -
+          1;
+
+
+      /*
+       * 마지막 문제
+       */
+      if (
+        isLast
+      ) {
+
+        transitionTimeoutRef.current =
+          setTimeout(
+            () => {
+
+              setActiveExplanation(
+                null
+              );
+
+
+              finishGame(
+                true,
+                null
+              );
+
+            },
+            CORRECT_FEEDBACK_TIME
+          );
+
+
+        return;
       }
 
 
       /*
-       * 중앙 정답 설명 표시
+       * 다음 문제
        */
-      setActiveExplanation({
-        title:
-          answer.title,
-
-        text:
-          answer.explanation,
-      });
-
-
-      /*
-       * 정답 설명은 1.6초 유지
-       */
-      explanationTimeoutRef.current =
+      transitionTimeoutRef.current =
         setTimeout(
           () => {
 
@@ -1125,200 +1960,152 @@ React.FC = () => {
               null
             );
 
-          },
-          1600
-        );
 
-
-      /* -------------------------------------------------------
-         모든 정답 발견
-      ------------------------------------------------------- */
-
-      if (
-        newFoundIds.length ===
-        currentQuestion
-          .answers.length
-      ) {
-
-        if (
-          timerRef.current
-        ) {
-
-          clearInterval(
-            timerRef.current
-          );
-
-
-          timerRef.current =
-            null;
-        }
-
-
-        isFinishedRef.current =
-          true;
-
-
-        soundManager
-          .playVictory();
-
-
-        const totalLimit =
-          currentQuestion
-            .timeLimit ||
-          config
-            .defaultTimeLimit ||
-          60;
-
-
-        const spent =
-          totalLimit -
-          timeLeft;
-
-
-        setTimeSpent(
-          Math.max(
-            0,
-            spent
-          )
-        );
-
-
-        setIsSuccess(
-          true
-        );
-
-
-        setFailReason(
-          null
-        );
-
-
-        /*
-         * 마지막 정답도 1.6초 보여준 뒤
-         * 결과 화면으로 이동
-         */
-        setTimeout(
-          () => {
-
-            setPlayState(
-              'RESULT'
+            setChoiceOptions(
+              []
             );
 
+
+            setWrongChoiceId(
+              null
+            );
+
+
+            setLocationFound(
+              false
+            );
+
+
+            setCurrentQuestionIndex(
+              previous =>
+                previous +
+                1
+            );
+
+
+            void completedIds;
+
           },
-          1600
+          CORRECT_FEEDBACK_TIME
         );
-      }
     };
 
 
   /* =========================================================
-     Wrong Click
+     2단계:
+     4지선다 선택
   ========================================================= */
 
-  const handleWrongClick =
-    () => {
+  const handleChoiceSelect =
+    (
+      choice:
+        SecurityVulnerability
+    ) => {
 
       if (
         isFinishedRef.current ||
-        !currentQuestion
+        !currentQuestion ||
+        !currentAnswer ||
+        !currentAnswer
+          .vulnerabilityId ||
+        activeExplanation
       ) {
 
         return;
       }
 
 
-      soundManager
-        .playWrong();
+      /* -------------------------------------------------------
+         정답
+      ------------------------------------------------------- */
+
+      if (
+        choice.id ===
+        currentAnswer
+          .vulnerabilityId
+      ) {
+
+        soundManager
+          .playCorrect();
 
 
-      setLives(
-        prev => {
-
-          const next =
-            prev - 1;
-
-
-          if (
-            next <= 0
-          ) {
-
-            if (
-              timerRef.current
-            ) {
-
-              clearInterval(
-                timerRef.current
-              );
+        const nextCompleted = [
+          ...completedQuestionIds,
+          currentQuestion.id,
+        ];
 
 
-              timerRef.current =
-                null;
-            }
+        setCompletedQuestionIds(
+          nextCompleted
+        );
 
 
-            if (
-              !isFinishedRef.current
-            ) {
-
-              isFinishedRef.current =
-                true;
+        setChoiceOptions(
+          []
+        );
 
 
-              soundManager
-                .playGameOver();
+        setWrongChoiceId(
+          null
+        );
 
 
-              const totalLimit =
-                currentQuestion
-                  .timeLimit ||
-                config
-                  .defaultTimeLimit ||
-                60;
+        /*
+         * 위치 + 취약점 종류를 모두 맞힌 후에만
+         * 최종 정답으로 인정
+         */
+        setActiveExplanation({
+
+          title:
+            choice.label,
+
+          text:
+            choice.description,
+        });
 
 
-              const spent =
-                totalLimit -
-                timeLeft;
+        moveToNextQuestion(
+          nextCompleted
+        );
 
 
-              setTimeSpent(
-                Math.max(
-                  0,
-                  spent
-                )
-              );
+        return;
+      }
 
 
-              setIsSuccess(
-                false
-              );
+      /* -------------------------------------------------------
+         오답
+      ------------------------------------------------------- */
 
-
-              setFailReason(
-                'NO_LIVES'
-              );
-
-
-              setTimeout(
-                () => {
-
-                  setPlayState(
-                    'RESULT'
-                  );
-
-                },
-                600
-              );
-            }
-
-
-            return 0;
-          }
-
-
-          return next;
-        }
+      setWrongChoiceId(
+        choice.id
       );
+
+
+      consumeLife();
+
+
+      if (
+        wrongChoiceTimeoutRef.current
+      ) {
+
+        clearTimeout(
+          wrongChoiceTimeoutRef.current
+        );
+      }
+
+
+      wrongChoiceTimeoutRef.current =
+        setTimeout(
+          () => {
+
+            setWrongChoiceId(
+              null
+            );
+
+          },
+          WRONG_CHOICE_FEEDBACK_TIME
+        );
     };
 
 
@@ -1330,9 +2117,14 @@ React.FC = () => {
     () => {
 
       if (
-        hintCount <= 0 ||
-        !currentQuestion ||
-        isFinishedRef.current
+        hintCount <=
+          0 ||
+
+        !currentAnswer ||
+
+        isFinishedRef.current ||
+
+        activeExplanation
       ) {
 
         return;
@@ -1343,44 +2135,37 @@ React.FC = () => {
         .playClick();
 
 
-      const unfound =
-        currentQuestion
-          .answers
-          .filter(
-            answer =>
-              !foundAnswerIds
-                .includes(
-                  answer.id
-                )
-          );
-
-
+      /*
+       * 위치 찾기 단계
+       */
       if (
-        unfound.length ===
-        0
+        !locationFound
       ) {
 
-        return;
+        setCurrentHintText(
+          currentAnswer.hint ||
+          '사진 속에서 개인정보나 계정정보가 부적절하게 노출되거나 방치된 부분을 살펴보세요.'
+        );
+
+      } else {
+
+        /*
+         * 4지선다 단계에서는
+         * 정답을 직접 알려주지 않음
+         */
+        setCurrentHintText(
+          '선택지를 천천히 읽고, 방금 찾은 장면이 어떤 정보보호 위반에 해당하는지 생각해보세요.'
+        );
       }
 
 
-      const randomAnswer =
-        unfound[
-          Math.floor(
-            Math.random() *
-              unfound.length
-          )
-        ];
-
-
-      setCurrentHintText(
-        randomAnswer.hint
-      );
-
-
       setHintCount(
-        h =>
-          h - 1
+        previous =>
+          Math.max(
+            0,
+            previous -
+            1
+          )
       );
 
 
@@ -1398,7 +2183,8 @@ React.FC = () => {
     () => {
 
       const next =
-        soundManager.toggle();
+        soundManager
+          .toggle();
 
 
       setIsMuted(
@@ -1415,32 +2201,39 @@ React.FC = () => {
     async () => {
 
       if (
-        activeQuestions.length ===
-        0
+        activeQuestions.length <
+        QUESTIONS_PER_GAME
       ) {
+
+        setPlayState(
+          'EMPTY'
+        );
+
 
         return;
       }
 
 
-      const chosen =
-        activeQuestions[
-          Math.floor(
-            Math.random() *
-              activeQuestions.length
-          )
-        ];
-
-
-      await setupQuestion(
-        chosen,
-        config
-      );
-
-
       setPlayState(
-        'PLAYING'
+        'LOADING'
       );
+
+
+      const prepared =
+        await prepareGameSet(
+          activeQuestions,
+          config
+        );
+
+
+      if (
+        prepared
+      ) {
+
+        setPlayState(
+          'PLAYING'
+        );
+      }
     };
 
 
@@ -1451,21 +2244,104 @@ React.FC = () => {
   const handleDemo =
     async () => {
 
-      await setupQuestion(
-        DEMO_QUESTION,
-        DEFAULT_CONFIG
-      );
+      const demoConfig:
+        GameConfig = {
+
+          ...DEFAULT_CONFIG,
+
+          defaultTimeLimit:
+            GAME_TIME_LIMIT,
+
+          defaultLives:
+            GAME_LIVES,
+
+          questionsPerGame:
+            QUESTIONS_PER_GAME,
+        };
 
 
       setConfig(
-        DEFAULT_CONFIG
+        demoConfig
+      );
+
+
+      setActiveQuestions(
+        DEMO_QUESTIONS
       );
 
 
       setPlayState(
-        'START'
+        'LOADING'
       );
+
+
+      const prepared =
+        await prepareGameSet(
+          DEMO_QUESTIONS,
+          demoConfig
+        );
+
+
+      if (
+        prepared
+      ) {
+
+        setPlayState(
+          'START'
+        );
+      }
     };
+
+
+  /* =========================================================
+     결과 화면용 Answer 배열
+  ========================================================= */
+
+  const allGameAnswers:
+    SecurityAnswer[] =
+      gameQuestions
+        .map(
+          question =>
+            getQuestionAnswer(
+              question
+            )
+        )
+        .filter(
+          (
+            answer
+          ):
+            answer is SecurityAnswer =>
+              Boolean(
+                answer
+              )
+        );
+
+
+  const foundGameAnswers:
+    SecurityAnswer[] =
+      gameQuestions
+        .filter(
+          question =>
+            completedQuestionIds
+              .includes(
+                question.id
+              )
+        )
+        .map(
+          question =>
+            getQuestionAnswer(
+              question
+            )
+        )
+        .filter(
+          (
+            answer
+          ):
+            answer is SecurityAnswer =>
+              Boolean(
+                answer
+              )
+        );
 
 
   /* =========================================================
@@ -1579,9 +2455,7 @@ React.FC = () => {
                 "
               />
 
-              <span>
-                정보보호 캠페인
-              </span>
+              정보보호 캠페인
 
             </div>
 
@@ -1605,7 +2479,7 @@ React.FC = () => {
                 text-slate-500
               "
             >
-              보안 캠페인 데이터를 불러오는 중입니다...
+              출제할 보안 취약점 사진 3장을 준비하는 중입니다...
             </p>
 
           </div>
@@ -1640,45 +2514,26 @@ React.FC = () => {
               border
               border-rose-100
               shadow-xl
-              shadow-rose-100/50
-              p-7
-              sm:p-8
+              p-8
               text-center
             "
           >
 
-            <div
+            <AlertCircle
               className="
-                w-14
-                h-14
+                w-12
+                h-12
+                text-rose-500
                 mx-auto
                 mb-4
-                rounded-2xl
-                bg-rose-50
-                border
-                border-rose-100
-                flex
-                items-center
-                justify-center
               "
-            >
-
-              <AlertCircle
-                className="
-                  w-7
-                  h-7
-                  text-rose-500
-                "
-              />
-
-            </div>
+            />
 
 
             <h2
               className="
                 text-xl
                 font-black
-                text-slate-900
                 mb-2
               "
             >
@@ -1690,7 +2545,6 @@ React.FC = () => {
               className="
                 text-sm
                 text-slate-500
-                leading-relaxed
                 mb-6
               "
             >
@@ -1701,10 +2555,8 @@ React.FC = () => {
             <div
               className="
                 flex
-                flex-wrap
-                items-center
                 justify-center
-                gap-2.5
+                gap-2
               "
             >
 
@@ -1717,16 +2569,12 @@ React.FC = () => {
                   px-5
                   py-2.5
                   bg-slate-100
-                  hover:bg-slate-200
-                  text-slate-700
                   rounded-xl
                   text-sm
                   font-bold
-                  transition-colors
-                  inline-flex
+                  flex
                   items-center
                   gap-2
-                  cursor-pointer
                 "
               >
 
@@ -1737,9 +2585,7 @@ React.FC = () => {
                   "
                 />
 
-                <span>
-                  다시 시도
-                </span>
+                다시 시도
 
               </button>
 
@@ -1753,16 +2599,13 @@ React.FC = () => {
                   px-5
                   py-2.5
                   bg-blue-600
-                  hover:bg-blue-700
                   text-white
                   rounded-xl
                   text-sm
                   font-bold
-                  shadow-md
-                  shadow-blue-200
                 "
               >
-                기본 문제로 체험하기
+                기본 문제 체험
               </button>
 
             </div>
@@ -1793,43 +2636,26 @@ React.FC = () => {
           <div
             className="
               w-full
-              max-w-md
+              max-w-lg
               bg-white
               rounded-3xl
               border
               border-sky-100
               shadow-xl
-              shadow-sky-100/60
               p-8
               text-center
             "
           >
 
-            <div
+            <Sparkles
               className="
-                w-14
-                h-14
+                w-12
+                h-12
+                text-blue-600
                 mx-auto
                 mb-4
-                rounded-2xl
-                bg-blue-50
-                border
-                border-blue-100
-                flex
-                items-center
-                justify-center
               "
-            >
-
-              <Sparkles
-                className="
-                  w-7
-                  h-7
-                  text-blue-600
-                "
-              />
-
-            </div>
+            />
 
 
             <h2
@@ -1840,7 +2666,7 @@ React.FC = () => {
                 mb-2
               "
             >
-              현재 등록된 문제가 없습니다.
+              출제 가능한 문제가 부족합니다.
             </h2>
 
 
@@ -1852,7 +2678,9 @@ React.FC = () => {
                 mb-6
               "
             >
-              관리자 페이지에서 새로운 보안 위험 문제를 등록하고 활성화해주세요.
+              새로운 방식의 게임을 진행하려면
+              정답 취약점과 위치가 등록된 활성 문제가
+              최소 3개 이상 필요합니다.
             </p>
 
 
@@ -1874,7 +2702,6 @@ React.FC = () => {
                   px-4
                   py-2.5
                   bg-slate-100
-                  hover:bg-slate-200
                   text-slate-700
                   text-sm
                   font-bold
@@ -1894,16 +2721,13 @@ React.FC = () => {
                   px-4
                   py-2.5
                   bg-blue-600
-                  hover:bg-blue-700
                   text-white
                   text-sm
                   font-bold
                   rounded-xl
-                  shadow-md
-                  shadow-blue-200
                 "
               >
-                기본 문제로 플레이
+                기본 문제 체험
               </button>
 
             </div>
@@ -1920,15 +2744,15 @@ React.FC = () => {
 
       {playState ===
         'START' &&
-        currentQuestion && (
+        gameQuestions.length >
+          0 && (
 
         <div
           className="
             flex-1
             flex
-            flex-col
-            justify-center
             items-center
+            justify-center
             p-4
           "
         >
@@ -1939,32 +2763,19 @@ React.FC = () => {
             }
 
             totalRisksCount={
-              currentQuestion
-                .answers.length
+              gameQuestions.length
             }
 
             timeLimit={
-              currentQuestion
-                .timeLimit ||
-              config
-                .defaultTimeLimit ||
-              60
+              GAME_TIME_LIMIT
             }
 
             lives={
-              currentQuestion
-                .lives ||
-              config
-                .defaultLives ||
-              3
+              GAME_LIVES
             }
 
             hintCount={
-              currentQuestion
-                .hintCount ??
-              config
-                .defaultHintCount ??
-              1
+              hintCount
             }
 
             onStart={() =>
@@ -1982,8 +2793,8 @@ React.FC = () => {
             }
 
             onRetryImageLoad={() =>
-              void setupQuestion(
-                currentQuestion,
+              void prepareGameSet(
+                activeQuestions,
                 config
               )
             }
@@ -1999,7 +2810,8 @@ React.FC = () => {
 
       {playState ===
         'PLAYING' &&
-        currentQuestion && (
+        currentQuestion &&
+        currentAnswer && (
 
         <div
           className="
@@ -2009,8 +2821,13 @@ React.FC = () => {
             h-screen
             overflow-hidden
             bg-white
+            relative
           "
         >
+
+          {/* =================================================
+              HUD
+          ================================================= */}
 
           <GameHUD
             gameTitle={
@@ -2026,20 +2843,15 @@ React.FC = () => {
             }
 
             maxLives={
-              currentQuestion
-                .lives ||
-              config
-                .defaultLives ||
-              3
+              GAME_LIVES
             }
 
             foundCount={
-              foundAnswerIds.length
+              completedQuestionIds.length
             }
 
             totalAnswers={
-              currentQuestion
-                .answers.length
+              gameQuestions.length
             }
 
             hintCount={
@@ -2060,41 +2872,519 @@ React.FC = () => {
           />
 
 
-          <ImageComparison
-            normalImageUrl={
-              normalImageSrc
-            }
+          {/* =================================================
+              현재 문제 번호
+          ================================================= */}
 
-            riskImageUrl={
-              riskImageSrc
+          <div
+            className="
+              absolute
+              top-[72px]
+              sm:top-[76px]
+              left-1/2
+              -translate-x-1/2
+              z-20
+              pointer-events-none
+            "
+          >
+
+            <div
+              className="
+                px-4
+                py-1.5
+                rounded-full
+                bg-white/95
+                backdrop-blur
+                border
+                border-sky-100
+                shadow-sm
+                text-xs
+                sm:text-sm
+                font-black
+                text-blue-700
+              "
+            >
+              문제 {currentQuestionIndex + 1}
+              {' / '}
+              {gameQuestions.length}
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              취약점 이미지
+          ================================================= */}
+
+          <ImageComparison
+            imageUrl={
+              currentImageSrc
             }
 
             answers={
-              currentQuestion
-                .answers
+              currentAnswers
             }
 
-            foundAnswerIds={
-              foundAnswerIds
+            locationFound={
+              locationFound
             }
 
-            onCorrectAnswer={
-              handleCorrectAnswer
+            onLocationFound={
+              handleLocationFound
             }
 
             onWrongClick={
-              handleWrongClick
+              handleWrongLocation
             }
 
-            activeExplanation={
-              activeExplanation
-            }
-
-            isGameOver={
-              isFinishedRef.current
+            isLocked={
+              isFinishedRef.current ||
+              Boolean(
+                activeExplanation
+              ) ||
+              locationFound
             }
           />
 
+
+          {/* =================================================
+              4지선다
+          ================================================= */}
+
+          {locationFound &&
+            choiceOptions.length >
+              0 &&
+            !activeExplanation && (
+
+            <div
+              className="
+                fixed
+                inset-0
+                z-50
+                bg-slate-900/20
+                backdrop-blur-[2px]
+                flex
+                items-center
+                justify-center
+                p-4
+              "
+            >
+
+              <div
+                className="
+                  w-full
+                  max-w-3xl
+                  bg-white
+                  rounded-3xl
+                  shadow-2xl
+                  border
+                  border-sky-100
+                  p-5
+                  sm:p-7
+                  md:p-8
+                "
+              >
+
+                <div
+                  className="
+                    text-center
+                    mb-6
+                  "
+                >
+
+                  <div
+                    className="
+                      inline-flex
+                      items-center
+                      px-3
+                      py-1
+                      rounded-full
+                      bg-blue-50
+                      text-blue-700
+                      text-xs
+                      font-black
+                      mb-3
+                    "
+                  >
+                    위치 발견!
+                  </div>
+
+
+                  <h2
+                    className="
+                      text-xl
+                      sm:text-2xl
+                      md:text-3xl
+                      font-black
+                      text-slate-900
+                    "
+                  >
+                    어떤 보안 취약점에 해당할까요?
+                  </h2>
+
+
+                  <p
+                    className="
+                      text-sm
+                      text-slate-500
+                      mt-2
+                    "
+                  >
+                    아래 4개 중 가장 알맞은 항목을 선택해주세요.
+                  </p>
+
+                </div>
+
+
+                <div
+                  className="
+                    grid
+                    grid-cols-1
+                    sm:grid-cols-2
+                    gap-3
+                  "
+                >
+
+                  {choiceOptions.map(
+                    (
+                      choice,
+                      index
+                    ) => {
+
+                      const isWrong =
+                        wrongChoiceId ===
+                        choice.id;
+
+
+                      return (
+
+                        <button
+                          key={
+                            choice.id
+                          }
+                          type="button"
+                          onClick={() =>
+                            handleChoiceSelect(
+                              choice
+                            )
+                          }
+                          className={`
+                            min-h-[76px]
+                            sm:min-h-[88px]
+                            px-4
+                            py-4
+                            rounded-2xl
+                            border-2
+                            text-left
+                            transition-all
+                            flex
+                            items-center
+                            gap-3
+                            ${
+                              isWrong
+                                ? `
+                                  bg-rose-50
+                                  border-rose-400
+                                  text-rose-800
+                                  scale-[0.99]
+                                `
+                                : `
+                                  bg-white
+                                  border-slate-200
+                                  hover:border-blue-400
+                                  hover:bg-blue-50/50
+                                  text-slate-800
+                                  hover:-translate-y-0.5
+                                  hover:shadow-md
+                                `
+                            }
+                          `}
+                        >
+
+                          <div
+                            className={`
+                              w-8
+                              h-8
+                              rounded-full
+                              shrink-0
+                              flex
+                              items-center
+                              justify-center
+                              text-sm
+                              font-black
+                              ${
+                                isWrong
+                                  ? `
+                                    bg-rose-100
+                                    text-rose-600
+                                  `
+                                  : `
+                                    bg-blue-50
+                                    text-blue-700
+                                  `
+                              }
+                            `}
+                          >
+
+                            {
+                              isWrong
+                                ? (
+                                  <XCircle
+                                    className="
+                                      w-5
+                                      h-5
+                                    "
+                                  />
+                                )
+                                : (
+                                  index +
+                                  1
+                                )
+                            }
+
+                          </div>
+
+
+                          <span
+                            className="
+                              text-sm
+                              sm:text-base
+                              font-bold
+                              leading-snug
+                            "
+                          >
+                            {choice.label}
+                          </span>
+
+                        </button>
+
+                      );
+                    }
+                  )}
+
+                </div>
+
+
+                <div
+                  className="
+                    mt-5
+                    text-center
+                    text-xs
+                    text-slate-400
+                  "
+                >
+                  틀린 선택지는 기회가 1회 차감됩니다.
+                </div>
+
+              </div>
+
+            </div>
+          )}
+
+
+          {/* =================================================
+              4지선다 생성 오류
+          ================================================= */}
+
+          {locationFound &&
+            choiceOptions.length ===
+              0 &&
+            errorMessage && (
+
+            <div
+              className="
+                fixed
+                inset-0
+                z-50
+                bg-slate-900/20
+                backdrop-blur-[2px]
+                flex
+                items-center
+                justify-center
+                p-4
+              "
+            >
+
+              <div
+                className="
+                  w-full
+                  max-w-lg
+                  bg-white
+                  rounded-3xl
+                  border
+                  border-rose-200
+                  shadow-2xl
+                  p-7
+                  text-center
+                "
+              >
+
+                <AlertCircle
+                  className="
+                    w-10
+                    h-10
+                    text-rose-500
+                    mx-auto
+                    mb-3
+                  "
+                />
+
+
+                <h3
+                  className="
+                    text-lg
+                    font-black
+                    text-slate-900
+                    mb-2
+                  "
+                >
+                  선택지를 만들 수 없습니다.
+                </h3>
+
+
+                <p
+                  className="
+                    text-sm
+                    text-slate-600
+                    leading-relaxed
+                  "
+                >
+                  {errorMessage}
+                </p>
+
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void loadGameData()
+                  }
+                  className="
+                    mt-5
+                    px-5
+                    py-2.5
+                    bg-blue-600
+                    hover:bg-blue-700
+                    text-white
+                    font-bold
+                    rounded-xl
+                  "
+                >
+                  게임 다시 불러오기
+                </button>
+
+              </div>
+
+            </div>
+          )}
+
+
+          {/* =================================================
+              최종 정답 피드백
+          ================================================= */}
+
+          {activeExplanation && (
+
+            <div
+              className="
+                fixed
+                inset-0
+                z-[60]
+                bg-slate-900/15
+                backdrop-blur-[2px]
+                flex
+                items-center
+                justify-center
+                p-4
+              "
+            >
+
+              <div
+                className="
+                  w-full
+                  max-w-2xl
+                  bg-white
+                  rounded-3xl
+                  border-2
+                  border-emerald-200
+                  shadow-2xl
+                  p-6
+                  sm:p-8
+                  text-center
+                "
+              >
+
+                <div
+                  className="
+                    w-14
+                    h-14
+                    rounded-2xl
+                    bg-emerald-50
+                    border
+                    border-emerald-200
+                    text-emerald-600
+                    flex
+                    items-center
+                    justify-center
+                    mx-auto
+                    mb-4
+                  "
+                >
+
+                  <CheckCircle2
+                    className="
+                      w-7
+                      h-7
+                    "
+                  />
+
+                </div>
+
+
+                <div
+                  className="
+                    text-sm
+                    font-black
+                    text-emerald-600
+                    mb-2
+                  "
+                >
+                  정답입니다!
+                </div>
+
+
+                <h3
+                  className="
+                    text-2xl
+                    sm:text-3xl
+                    font-black
+                    text-slate-900
+                    mb-3
+                  "
+                >
+                  {activeExplanation.title}
+                </h3>
+
+
+                <p
+                  className="
+                    text-sm
+                    sm:text-base
+                    text-slate-600
+                    leading-relaxed
+                  "
+                >
+                  {activeExplanation.text}
+                </p>
+
+              </div>
+
+            </div>
+          )}
+
+
+          {/* =================================================
+              Hint
+          ================================================= */}
 
           <HintModal
             isOpen={
@@ -2122,15 +3412,15 @@ React.FC = () => {
 
       {playState ===
         'RESULT' &&
-        currentQuestion && (
+        gameQuestions.length >
+          0 && (
 
         <div
           className="
             flex-1
             flex
-            flex-col
-            justify-center
             items-center
+            justify-center
             p-4
           "
         >
@@ -2141,20 +3431,11 @@ React.FC = () => {
             }
 
             foundAnswers={
-              currentQuestion
-                .answers
-                .filter(
-                  answer =>
-                    foundAnswerIds
-                      .includes(
-                        answer.id
-                      )
-                )
+              foundGameAnswers
             }
 
             allAnswers={
-              currentQuestion
-                .answers
+              allGameAnswers
             }
 
             livesLeft={
@@ -2162,11 +3443,7 @@ React.FC = () => {
             }
 
             maxLives={
-              currentQuestion
-                .lives ||
-              config
-                .defaultLives ||
-              3
+              GAME_LIVES
             }
 
             timeSpent={
